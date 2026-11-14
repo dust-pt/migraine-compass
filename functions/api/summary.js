@@ -9,7 +9,8 @@ export async function onRequestPost({ request, env }) {
   const origin = request.headers.get('Origin');
   const host = new URL(request.url).origin;
   if (origin && origin !== host) return json({ error: 'forbidden' }, 403);
-  if (!env.GEMINI_API_KEY) return json({ error: 'not_configured' }, 503);
+  const apiKey = env.GEMINI_API_KEY || env['Gemini API Key'];
+  if (!apiKey) return json({ error: 'not_configured' }, 503);
 
   const ip = request.headers.get('CF-Connecting-IP') || 'x';
   const now = Date.now();
@@ -30,7 +31,7 @@ export async function onRequestPost({ request, env }) {
   const model = env.GEMINI_MODEL || MODEL_DEFAULT;
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
     body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.3, maxOutputTokens: 400 } })
   });
   if (!r.ok) return json({ error: 'upstream' }, 502);
