@@ -323,7 +323,7 @@ document.addEventListener('click', async e => {
   if (a === 'ai') {
     S.summary = document.getElementById('summary').value; S.summaryBusy = true; render();
     try {
-      const r = await fetch('/api/summary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stats: stats(logs()) }) });
+      const r = await fetch('/api/summary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stats: stats(logs()) }), signal: AbortSignal.timeout(30000) });
       if (!r.ok) throw new Error(r.status);
       const j = await r.json(); if (!j.text) throw new Error('empty');
       S.summary = j.text; S.summaryAI = true;

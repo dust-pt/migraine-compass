@@ -29,11 +29,15 @@ export async function onRequestPost({ request, env }) {
     JSON.stringify(stats);
 
   const model = env.GEMINI_MODEL || MODEL_DEFAULT;
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+  let r;
+  try {
+    r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.3, maxOutputTokens: 400 } })
-  });
+    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.3, maxOutputTokens: 400 } }),
+      signal: AbortSignal.timeout(20000)
+    });
+  } catch { return json({ error: 'timeout' }, 504); }
   if (!r.ok) {
     let detail = '';
     try { detail = (await r.json())?.error?.message || ''; } catch { /* ignore */ }
