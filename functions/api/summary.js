@@ -2,7 +2,7 @@
 // Turns aggregated counts (never raw notes) into a short doctor-friendly summary using Gemini.
 // Set GEMINI_API_KEY as an encrypted environment variable in the Pages project. Never commit it.
 
-const MODEL_DEFAULT = 'gemini-2.5-flash';
+const MODEL_DEFAULT = 'gemini-3.8-flash';
 const hits = new Map(); // best-effort per-isolate rate limit
 
 export async function onRequestPost({ request, env }) {
