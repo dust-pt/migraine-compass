@@ -2,7 +2,7 @@
 // Turns aggregated counts (never raw notes) into a short doctor-friendly summary using Gemini.
 // Set GEMINI_API_KEY as an encrypted environment variable in the Pages project. Never commit it.
 
-const MODEL_DEFAULT = 'gemini-3.8-flash';
+const MODEL_DEFAULT = 'gemini-flash-lite-latest';
 const hits = new Map(); // best-effort per-isolate rate limit
 
 export async function onRequestPost({ request, env }) {
@@ -51,18 +51,3 @@ export async function onRequestPost({ request, env }) {
 
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
-
-// TEMPORARY diagnostic (remove after use): GET /api/summary lists models visible to the key.
-export async function onRequestGet({ env }) {
-  const apiKey = env.GEMINI_API_KEY || env['Gemini API Key'];
-  if (!apiKey) return json({ error: 'not_configured' }, 503);
-  const t = Date.now();
-  try {
-    const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=100', {
-      headers: { 'x-goog-api-key': apiKey }, signal: AbortSignal.timeout(8000)
-    });
-    const j = await r.json();
-    return json({ status: r.status, ms: Date.now() - t, error: j.error?.message?.slice(0, 200),
-      models: (j.models || []).filter(m => (m.supportedGenerationMethods || []).includes('generateContent')).map(m => m.name.replace('models/', '')) });
-  } catch (e) { return json({ error: 'timeout_or_network', ms: Date.now() - t }, 504); }
-}
