@@ -34,7 +34,11 @@ export async function onRequestPost({ request, env }) {
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
     body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.3, maxOutputTokens: 400 } })
   });
-  if (!r.ok) return json({ error: 'upstream' }, 502);
+  if (!r.ok) {
+    let detail = '';
+    try { detail = (await r.json())?.error?.message || ''; } catch { /* ignore */ }
+    return json({ error: 'upstream', status: r.status, detail: detail.slice(0, 200) }, 502);
+  }
   const data = await r.json();
   const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join('').trim();
   if (!text) return json({ error: 'empty' }, 502);
