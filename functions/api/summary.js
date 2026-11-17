@@ -23,9 +23,10 @@ export async function onRequestPost({ request, env }) {
   if (!stats || typeof stats !== 'object' || JSON.stringify(stats).length > 4000) return json({ error: 'bad_request' }, 400);
 
   const prompt =
-    'You help a patient prepare for a doctor visit. From these migraine statistics, write a clear summary ' +
-    'in plain English, max 120 words, no diagnosis, no advice, no invented facts. Mention frequency, ' +
-    'average intensity, medication use, most frequent factors and what helped. Statistics (JSON):\n' +
+    'You help a patient prepare for a doctor visit. From these migraine statistics, write three short sections in plain ' +
+    'English, one sentence each, no diagnosis, no advice, no invented facts, and keep every number exactly as given. ' +
+    'Return JSON with keys "frequency" (how many and how recent), "intensity" (usual intensity range out of 10 and, if given, ' +
+    'duration in hours), and "alongside" (the most logged factors with their counts, e.g. "Slept under 6 h (6×)"). Statistics:\n' +
     JSON.stringify(stats);
 
   const model = env.GEMINI_MODEL || MODEL_DEFAULT;
@@ -34,7 +35,7 @@ export async function onRequestPost({ request, env }) {
     r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.3, maxOutputTokens: 400 } }),
+    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2, maxOutputTokens: 400, responseMimeType: 'application/json' } }),
       signal: AbortSignal.timeout(20000)
     });
   } catch { return json({ error: 'timeout' }, 504); }
@@ -46,7 +47,10 @@ export async function onRequestPost({ request, env }) {
   const data = await r.json();
   const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join('').trim();
   if (!text) return json({ error: 'empty' }, 502);
-  return json({ text });
+  let sections;
+  try { sections = JSON.parse(text); } catch { return json({ error: 'bad_json' }, 502); }
+  const clean = v => typeof v === 'string' ? v.trim().slice(0, 300) : '';
+  return json({ sections: { frequency: clean(sections.frequency), intensity: clean(sections.intensity), alongside: clean(sections.alongside) } });
 }
 
 const json = (obj, status = 200) =>

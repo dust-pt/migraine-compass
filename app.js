@@ -1,60 +1,62 @@
-/* Migraine Compass — prototype PWA. All data stays on the device (localStorage). */
+/* Migraine Compass — PWA that mirrors the Figma prototype. All entries stay on the device (localStorage). */
 'use strict';
 
-// ---------- Options ----------
+// ---------- Options (same as Figma) ----------
 const OPT = {
+  started: ['Now', '1 h ago', 'Earlier today', 'Yesterday'],
+  ongoing: ['Yes', 'No'],
   routine: ['Irregular schedule', 'Skipped exercise', 'More exercise', 'Sun exposure', 'Trip', 'Late night', 'Menstruation', 'No change'],
   food: ['Skipped a meal', 'Late meal', 'Coffee', 'Alcohol', 'Chocolate', 'Aged cheese', 'Processed food', 'Little water', 'Nothing unusual'],
   feelings: ['Stressed', 'Anxious', 'Sad', 'Irritable', 'Tired', 'Calm', 'Happy', 'Excited'],
   medication: ['Took medication', 'No medication'],
   helped: ['Dark room', 'Rest', 'Sleep']
 };
+const SINGLE = ['started', 'ongoing', 'medication'];
 const EXCLUSIVE = { 'No change': 'routine', 'Nothing unusual': 'food' };
 
 // ---------- Storage ----------
 const read = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } };
-const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage full/blocked */ } };
+const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage blocked */ } };
 const logs = () => read('mc.logs', []).sort((a, b) => b.start.localeCompare(a.start));
 const saveLogs = v => write('mc.logs', v);
 const settings = () => Object.assign({ menstruation: true }, read('mc.settings', {}));
 
 // ---------- State ----------
-const nowLocal = () => {
-  const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().slice(0, 16);
-};
-const blankDraft = () => ({
-  start: nowLocal(), intensity: 7, ongoing: false,
-  routine: [], food: [], feelings: [], medication: null, helped: [], note: '', auto: null
-});
-const S = { screen: 'home', draft: blankDraft(), period: '6m', summary: null, summaryAI: false, summaryBusy: false };
+const blankDraft = () => ({ started: 'Now', intensity: 7, ongoing: 'Yes', routine: [], food: [], feelings: [],
+  medication: null, helped: [], note: '', auto: null });
+const S = { screen: 'home', draft: blankDraft(), period: '6m', sum: null, editing: false };
 
 // ---------- Helpers ----------
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const fmtDate = iso => new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-const fmtDay = iso => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+const DAY = 864e5;
 const hm = min => `${Math.floor(min / 60)} h ${String(Math.round(min % 60)).padStart(2, '0')} min`;
 const monthKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+const localISO = d => { const x = new Date(d); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0, 16); };
+const startFrom = opt => {
+  const d = new Date();
+  if (opt === '1 h ago') d.setHours(d.getHours() - 1);
+  if (opt === 'Earlier today') d.setHours(Math.max(0, d.getHours() - 4));
+  if (opt === 'Yesterday') d.setTime(d.getTime() - DAY);
+  return localISO(d);
+};
 const toast = msg => {
   const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show');
   clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2600);
 };
-const chip = (group, label, on) =>
-  `<button class="chip" data-a="chip" data-g="${group}" data-v="${esc(label)}" aria-pressed="${on}">${esc(label)}</button>`;
-const chips = (group, list, selected) =>
-  `<div class="chips">${list.map(l => chip(group, l, selected.includes(l))).join('')}</div>`;
+const chip = (g, l, on) => `<button class="chip" data-a="chip" data-g="${g}" data-v="${esc(l)}" aria-pressed="${on}">${esc(l)}</button>`;
+const chips = (g, list, sel) => `<div class="chips">${list.map(l => chip(g, l, Array.isArray(sel) ? sel.includes(l) : sel === l)).join('')}</div>`;
 
 function nav(active) {
-  const items = [['home', '⌂', 'Home'], ['history', '▤', 'History'], ['doctor', '✚', 'Doctor']];
-  return `<nav class="tabs">${items.map(([id, ic, lb]) =>
-    `<button data-a="go" data-v="${id}" ${id === active ? 'aria-current="page"' : ''}><span>${ic}</span>${lb}</button>`).join('')}</nav>`;
+  const items = [['home', 'Home'], ['history', 'History'], ['doctor', 'Summary']];
+  return `<nav class="tabs">${items.map(([id, lb]) =>
+    `<button data-a="go" data-v="${id}" ${id === active ? 'aria-current="page"' : ''}>${lb}</button>`).join('')}</nav>`;
 }
 
-// ---------- Automatic data (simulated where the web can't read it) ----------
-// Sleep (smartwatch) and screen time are simulated for the test; weather is real when location is allowed.
-function simulatedAuto() {
+// ---------- Automatic data ----------
+// Sleep (smartwatch) and screen time are sample data; weather is real when location is allowed.
+function sampleAuto() {
   const rnd = (a, b) => Math.round(a + Math.random() * (b - a));
-  return { sleepMin: rnd(280, 460), screenMin: rnd(180, 480), weather: null, simulated: true };
+  return { sleepMin: rnd(280, 460), screenMin: rnd(180, 480), weather: null };
 }
 async function fetchWeather() {
   try {
@@ -69,234 +71,252 @@ async function fetchWeather() {
 }
 async function loadAuto() {
   const d = S.draft; if (d.auto) return;
-  d.auto = simulatedAuto();
-  render();
+  d.auto = sampleAuto(); render();
   const w = await fetchWeather();
-  d.auto.weather = w || 'Unavailable (location off)';
+  d.auto.weather = w || 'Location off';
   if (S.screen === 'log2') render();
-}
-
-// ---------- Screens ----------
-const screens = {
-  home() {
-    const all = logs(), last = all[0], key = monthKey(new Date());
-    const month = all.filter(l => l.start.startsWith(key)).length;
-    return `<div class="screen has-nav">
-      <div class="top"><div><p class="muted small">Hello</p><h1>Migraine Compass</h1></div>
-        <button class="icon-btn" data-a="go" data-v="settings" aria-label="Settings">⚙</button></div>
-      <div class="card"><h2>How are you now?</h2>
-        <button class="btn" data-a="start">Log a migraine</button></div>
-      <div class="row">
-        <div class="card stat"><h2>Last migraine</h2><b style="font-size:20px">${last ? esc(fmtDay(last.start)) : '—'}</b>
-          <span class="muted small">${last ? `Intensity ${last.intensity}/10` : 'Nothing logged yet'}</span></div>
-        <div class="card stat"><h2>This month</h2><b>${month}</b><span class="muted small">${month === 1 ? 'migraine' : 'migraines'}</span></div>
-      </div>
-      <div class="card"><h2>Doctor visit coming up?</h2>
-        <p class="muted small" style="margin-bottom:12px">Get a short summary of your recent migraines to share.</p>
-        <button class="btn secondary" data-a="go" data-v="doctor">Prepare summary</button></div>
-    </div>${nav('home')}`;
-  },
-
-  log1() {
-    const d = S.draft;
-    return step(1, 'When did it start?', `
-      <div class="card"><h2>Started</h2>
-        <input type="datetime-local" id="start" value="${esc(d.start)}" max="${nowLocal()}"></div>
-      <div class="card"><h2>Intensity</h2>
-        <div class="scale">${[1,2,3,4,5,6,7,8,9,10].map(n =>
-          `<button class="chip" data-a="intensity" data-v="${n}" aria-pressed="${d.intensity === n}">${n}</button>`).join('')}</div>
-        <p class="muted small" style="margin-top:10px">1 = mild · 10 = worst imaginable</p></div>
-      <div class="card"><label class="switch"><span>Still ongoing</span>
-        <input type="checkbox" id="ongoing" ${d.ongoing ? 'checked' : ''}></label></div>`, 'log2', 'home');
-  },
-
-  log2() {
-    const d = S.draft, a = d.auto || { sleepMin: 0, screenMin: 0, weather: null };
-    const list = OPT.routine.filter(o => settings().menstruation || o !== 'Menstruation');
-    return step(2, 'Routine', `
-      <div class="card"><h2>Collected automatically</h2>
-        <div class="auto">
-          <div><span>Sleep last night</span><b>${d.auto ? hm(a.sleepMin) : '…'}</b></div>
-          <div><span>Weather</span><b>${a.weather ? esc(a.weather) : '…'}</b></div>
-          <div><span>Screen time</span><b>${d.auto ? hm(a.screenMin) : '…'}</b></div>
-        </div>
-        <p class="muted small" style="margin-top:10px">Sleep and screen time are simulated in this test version.</p></div>
-      <div class="card"><h2>Anything different today?</h2>${chips('routine', list, d.routine)}
-        <p class="muted small" style="margin-top:10px">Menstruation can be hidden in Settings.</p></div>`, 'log3', 'log1');
-  },
-
-  log3() {
-    const d = S.draft;
-    return step(3, 'Food, drink and feelings', `
-      <div class="card"><h2>Food and drink</h2>${chips('food', OPT.food, d.food)}</div>
-      <div class="card"><h2>How are you feeling?</h2>${chips('feelings', OPT.feelings, d.feelings)}</div>`, 'log4', 'log2');
-  },
-
-  log4() {
-    const d = S.draft;
-    return step(4, 'What happened after?', `
-      <div class="card"><h2>Medication taken</h2>${chips('medication', OPT.medication, d.medication ? [d.medication] : [])}</div>
-      <div class="card"><h2>What helped</h2>${chips('helped', OPT.helped, d.helped)}</div>
-      <div class="card"><h2>Note (optional)</h2>
-        <textarea id="note" placeholder="Anything else you want to remember…">${esc(d.note)}</textarea></div>`, 'save', 'log3', 'Save migraine');
-  },
-
-  saved() {
-    return `<div class="screen"><div class="center">
-      <div class="check">✓</div><h1>Saved</h1>
-      <p class="muted">Your migraine was added to your history.</p></div>
-      <div class="footer"><button class="btn" data-a="go" data-v="history">See history</button>
-        <button class="btn ghost" data-a="go" data-v="home">Back to home</button></div></div>`;
-  },
-
-  history() {
-    const all = logs(), now = new Date();
-    const cut = S.period === '30d' ? new Date(now - 30 * 864e5) : S.period === '6m' ? new Date(now.getFullYear(), now.getMonth() - 5, 1) : new Date(0);
-    const list = all.filter(l => new Date(l.start) >= cut);
-    const last30 = all.filter(l => new Date(l.start) >= new Date(now - 30 * 864e5)).length;
-    const months = [...Array(6)].map((_, i) => {
-      const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
-      return { label: d.toLocaleDateString('en-GB', { month: 'short' }), n: all.filter(l => l.start.startsWith(monthKey(d))).length };
-    });
-    const max = Math.max(1, ...months.map(m => m.n));
-    const top = topFactors(list).slice(0, 4);
-    return `<div class="screen has-nav"><h1>History</h1>
-      <div class="seg" role="group" aria-label="Period">${[['6m', '6 months'], ['30d', '30 days'], ['all', 'All']].map(([k, l]) =>
-        `<button data-a="period" data-v="${k}" aria-pressed="${S.period === k}">${l}</button>`).join('')}</div>
-      <div class="row">
-        <div class="card stat"><b>${list.length}</b><span class="muted small">in ${S.period === '30d' ? '30 days' : S.period === '6m' ? '6 months' : 'total'}</span></div>
-        <div class="card stat"><b>${last30}</b><span class="muted small">in last 30 days</span></div></div>
-      <div class="card"><h2>Per month</h2><div class="bars">${months.map(m =>
-        `<div class="col ${m.n ? '' : 'zero'}"><i style="height:${Math.round(m.n / max * 80)}%"></i><span>${m.label}</span></div>`).join('')}</div></div>
-      <div class="card"><h2>Most logged</h2>${top.length ? top.map(([k, n]) =>
-        `<div class="factor"><span>${esc(k)}</span><b>${n}×</b></div>`).join('') : '<p class="muted small">Log a few migraines to see patterns.</p>'}</div>
-      <div class="card"><h2>Attacks</h2>${list.length ? list.map(l => `<div class="attack">
-        <div class="between row"><b>${esc(fmtDate(l.start))}</b><span class="pill">${l.intensity}/10</span></div>
-        <p class="muted small">${esc([...l.routine, ...l.food, ...l.feelings].slice(0, 4).join(' · ') || 'No factors logged')}</p></div>`).join('')
-        : '<p class="muted small">Nothing here yet.</p>'}</div>
-    </div>${nav('history')}`;
-  },
-
-  doctor() {
-    const all = logs();
-    if (S.summary === null) S.summary = buildSummary(all);
-    return `<div class="screen has-nav"><h1>Doctor summary</h1>
-      ${S.summaryAI ? '<div class="banner">Drafted by AI from your counts only. Check it before sharing.</div>' : ''}
-      <div class="card"><textarea id="summary" style="min-height:230px" ${all.length ? '' : 'disabled'}>${esc(S.summary)}</textarea></div>
-      <button class="btn secondary" data-a="ai" ${all.length && !S.summaryBusy ? '' : 'disabled'}>${S.summaryBusy ? 'Drafting…' : 'Improve with AI'}</button>
-      <button class="btn ghost" data-a="reset-summary" ${all.length ? '' : 'disabled'}>Reset to automatic text</button>
-      <button class="btn" data-a="email" ${all.length ? '' : 'disabled'}>Send by email</button>
-    </div>${nav('doctor')}`;
-  },
-
-  settings() {
-    const s = settings();
-    return `<div class="screen"><div class="top"><button class="icon-btn" data-a="go" data-v="home" aria-label="Back">←</button><h1>Settings</h1><span style="width:40px"></span></div>
-      <div class="card"><label class="switch"><span>Show “Menstruation” option</span>
-        <input type="checkbox" id="menstruation" ${s.menstruation ? 'checked' : ''}></label></div>
-      <div class="card"><h2>Test data</h2>
-        <p class="muted small" style="margin-bottom:12px">Fictional entries so you can explore History and the doctor summary.</p>
-        <div class="row"><button class="btn secondary" data-a="demo">Load demo data</button>
-        <button class="btn ghost" data-a="clear">Delete all</button></div></div>
-      <p class="muted small">Everything is stored only on this device.</p></div>`;
-  }
-};
-
-function step(n, title, body, next, back, cta = 'Next') {
-  return `<div class="screen">
-    <div class="top"><button class="icon-btn" data-a="go" data-v="${back}" aria-label="Back">←</button>
-      <span class="progress">Step ${n} of 4</span><button class="icon-btn" data-a="cancel" aria-label="Cancel">✕</button></div>
-    <div class="bar"><i style="width:${n * 25}%"></i></div>
-    <h1>${esc(title)}</h1>${body}
-    <div class="footer"><button class="btn" data-a="${next === 'save' ? 'save' : 'go'}" data-v="${next}">${cta}</button></div></div>`;
 }
 
 // ---------- Analysis ----------
 function factorsOf(l) {
-  const f = [...l.routine, ...l.food, ...l.feelings].filter(x => x !== 'No change' && x !== 'Nothing unusual' && x !== 'Calm' && x !== 'Happy');
-  if (l.auto && l.auto.sleepMin < 360) f.push('Slept under 6 h');
+  const f = [...l.routine, ...l.food, ...l.feelings].filter(x => !['No change', 'Nothing unusual', 'Calm', 'Happy', 'Excited'].includes(x));
+  if (l.auto && l.auto.sleepMin < 360) f.unshift('Slept under 6 h');
   return f;
 }
 function topFactors(list) {
   const c = {}; list.forEach(l => factorsOf(l).forEach(f => c[f] = (c[f] || 0) + 1));
   return Object.entries(c).sort((a, b) => b[1] - a[1]);
 }
+const inPeriod = (all, p) => {
+  const now = new Date();
+  const cut = p === '30d' ? new Date(now - 30 * DAY) : p === '6m' ? new Date(now.getFullYear(), now.getMonth() - 5, 1) : new Date(0);
+  return all.filter(l => new Date(l.start) >= cut);
+};
+const fmtMonth = d => d.toLocaleDateString('en-GB', { month: 'short' });
 function stats(all) {
-  const list = all.filter(l => new Date(l.start) >= new Date(Date.now() - 180 * 864e5));
+  const list = inPeriod(all, '6m');
   if (!list.length) return null;
-  const avg = list.reduce((s, l) => s + l.intensity, 0) / list.length;
-  const med = list.filter(l => l.medication === 'Took medication').length;
-  const helped = {}; list.forEach(l => l.helped.forEach(h => helped[h] = (helped[h] || 0) + 1));
+  const ints = list.map(l => l.intensity).sort((a, b) => a - b);
+  const durs = list.map(l => l.durationH).filter(Boolean).sort((a, b) => a - b);
+  const q = (arr, p) => arr[Math.min(arr.length - 1, Math.floor(p * arr.length))];
+  const helped = {}; list.forEach(l => (l.helped || []).forEach(h => helped[h] = (helped[h] || 0) + 1));
+  const first = new Date(list[list.length - 1].start), last = new Date(list[0].start);
   return {
-    count: list.length, from: fmtDay(list[list.length - 1].start), to: fmtDay(list[0].start),
-    avgIntensity: Math.round(avg * 10) / 10, medication: med,
-    topFactors: topFactors(list).slice(0, 5).map(([k, n]) => ({ factor: k, times: n })),
-    helped: Object.entries(helped).sort((a, b) => b[1] - a[1]).map(([k, n]) => ({ what: k, times: n }))
+    period: `${fmtMonth(first)} – ${fmtMonth(last)} ${last.getFullYear()}`,
+    count6m: list.length, last30: inPeriod(all, '30d').length,
+    intensityRange: [q(ints, .2), q(ints, .8)],
+    durationRangeHours: durs.length ? [q(durs, .2), q(durs, .8)] : null,
+    medicationTaken: list.filter(l => l.medication === 'Took medication').length,
+    topFactors: topFactors(list).slice(0, 4).map(([factor, times]) => ({ factor, times })),
+    helped: Object.entries(helped).sort((a, b) => b[1] - a[1]).map(([what, times]) => ({ what, times }))
   };
 }
-function buildSummary(all) {
-  const s = stats(all);
-  if (!s) return 'No migraines logged yet. Add entries and a summary will appear here.';
-  const lines = [
-    `Migraine summary, ${s.from} to ${s.to} (last 6 months).`,
-    `Logged ${s.count} migraine${s.count === 1 ? '' : 's'}, average intensity ${s.avgIntensity}/10.`,
-    `Medication taken in ${s.medication} of ${s.count}.`
-  ];
-  if (s.topFactors.length) lines.push(`Most frequent factors: ${s.topFactors.map(f => `${f.factor} (${f.times}×)`).join(', ')}.`);
-  if (s.helped.length) lines.push(`What helped: ${s.helped.map(h => `${h.what} (${h.times}×)`).join(', ')}.`);
-  return lines.join('\n');
+function localSummary(st) {
+  const [a, b] = st.intensityRange, d = st.durationRangeHours;
+  const along = st.topFactors.map((f, i) => `${i ? f.factor.charAt(0).toLowerCase() + f.factor.slice(1) : f.factor} (${f.times}×)`).join(', ');
+  return {
+    title: `Migraine summary · ${st.period}`,
+    frequency: `${st.count6m} migraine${st.count6m === 1 ? '' : 's'} in 6 months, ${st.last30} in the last 30 days.`,
+    intensity: `Usually ${a === b ? a : `${a}–${b}`} out of 10${d ? `, lasting about ${d[0] === d[1] ? d[0] : `${d[0]}–${d[1]}`} hours` : ''}.`,
+    alongside: along ? along + '.' : 'Nothing logged alongside yet.',
+    questions: '', ai: false
+  };
 }
 
-// ---------- Demo data (fictional) ----------
+// ---------- Screens ----------
+const screens = {
+  home() {
+    const all = logs(), last = all[0];
+    const month = all.filter(l => l.start.startsWith(monthKey(new Date()))).length;
+    const lastTxt = last ? [new Date(last.start).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }),
+      `intensity ${last.intensity}/10`, last.durationH ? `about ${last.durationH} h` : null].filter(Boolean).join(' · ') : 'Nothing logged yet';
+    return `<div class="screen">
+      <div class="brand"><span>Migraine Compass</span><button class="gear" data-a="go" data-v="settings" aria-label="Settings">⚙</button></div>
+      <h1>How are you today?</h1>
+      <button class="hero" data-a="start"><b>Log a migraine</b><span>Four quick steps: when, routine, food and emotions.</span><i>Start ›</i></button>
+      <div class="card"><p class="label">Last migraine</p><p>${esc(lastTxt)}</p></div>
+      <div class="card"><p class="label">This month</p><p class="big">${month} migraine${month === 1 ? '' : 's'} logged</p>
+        <button class="textlink" data-a="go" data-v="history">See History ›</button></div>
+      <div class="card"><p class="big" style="margin-bottom:6px">Doctor visit coming up?</p>
+        <p class="muted" style="margin-bottom:12px">The app reads your full history and drafts a summary you can review and email.</p>
+        <button class="btn outline" data-a="go" data-v="doctor">Prepare doctor summary</button></div>
+    </div>${nav('home')}`;
+  },
+
+  log1() {
+    const d = S.draft;
+    return step(1, 'When did it start?', 'And how strong is it right now?', `
+      <div class="card"><p class="label">Started</p>${chips('started', OPT.started, d.started)}</div>
+      <div class="card"><p class="label">Intensity (1 = mild, 10 = severe)</p>
+        <div class="circles">${[1,2,3,4,5,6,7,8,9,10].map(n =>
+          `<button class="chip" data-a="intensity" data-v="${n}" aria-pressed="${d.intensity === n}">${n}</button>`).join('')}</div></div>
+      <div class="card"><p class="label">Still ongoing?</p>${chips('ongoing', OPT.ongoing, d.ongoing)}</div>`, 'log2', 'home');
+  },
+
+  log2() {
+    const d = S.draft, a = d.auto;
+    const list = OPT.routine.filter(o => settings().menstruation || o !== 'Menstruation');
+    return step(2, 'Any change in routine?', 'Select everything that applies in the last 24 hours.', `
+      <div class="autobox"><p class="label">Filled in automatically</p>
+        <div class="autorow"><div>Sleep last night<small>From your smartwatch</small></div><b>${a ? hm(a.sleepMin) : '…'}</b></div>
+        <div class="autorow"><div>Weather today<small>From the internet, using your location</small></div><b>${a && a.weather ? esc(a.weather) : '…'}</b></div>
+        <div class="autorow"><div>Screen time yesterday<small>From your phone</small></div><b>${a ? hm(a.screenMin) : '…'}</b></div>
+        <p class="note">Read only with your permission. Sleep and screen time are sample data.</p></div>
+      ${chips('routine', list, d.routine)}
+      <p class="note">Menstruation is optional and only appears if you turn it on in Settings.</p>`, 'log3', 'log1');
+  },
+
+  log3() {
+    const d = S.draft;
+    return step(3, 'Food, drink and feelings', 'Select what applies. Everything is optional.', `
+      <div class="card"><p class="label">Food and drink</p>${chips('food', OPT.food, d.food)}</div>
+      <div class="card"><p class="label">How are you feeling?</p>${chips('feelings', OPT.feelings, d.feelings)}</div>`, 'log4', 'log2');
+  },
+
+  log4() {
+    const d = S.draft;
+    return step(4, 'What happened after?', 'Medication and what helped. Everything here is optional.', `
+      <div class="card"><p class="label">Medication taken</p>${chips('medication', OPT.medication, d.medication)}</div>
+      <div class="card"><p class="label">What helped</p>${chips('helped', OPT.helped, d.helped)}</div>
+      <div class="card"><p class="label">Note (optional)</p>
+        <textarea id="note" placeholder="Tap to write anything else worth remembering…">${esc(d.note)}</textarea></div>`, 'save', 'log3', 'Save migraine');
+  },
+
+  saved() {
+    return `<div class="screen"><div class="center">
+      <div class="check">✓</div><h1 style="font-size:26px">Migraine logged</h1>
+      <p class="muted">It has been added to your History. Take care of yourself.</p></div>
+      <div class="footer"><button class="btn" data-a="go" data-v="history">Go to History</button>
+        <button class="btn outline" data-a="go" data-v="home">Back to Home</button></div></div>`;
+  },
+
+  history() {
+    const all = logs(), now = new Date(), list = inPeriod(all, S.period);
+    const months = [...Array(6)].map((_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
+      return { label: fmtMonth(d), n: all.filter(l => l.start.startsWith(monthKey(d))).length };
+    });
+    const max = Math.max(1, ...months.map(m => m.n));
+    const top = topFactors(list).slice(0, 4), topMax = top.length ? top[0][1] : 1;
+    const per = { '30d': 'in 30 days', '6m': 'in 6 months', all: 'in total' }[S.period];
+    return `<div class="screen"><h1 style="margin-top:12px">History</h1>
+      <div class="seg" role="group" aria-label="Period">${[['30d', '30 days'], ['6m', '6 months'], ['all', 'All time']].map(([k, l]) =>
+        `<button data-a="period" data-v="${k}" aria-pressed="${S.period === k}">${l}</button>`).join('')}</div>
+      <div class="row">
+        <div class="card stat grow"><b>${list.length}</b><span>migraine${list.length === 1 ? '' : 's'} ${per}</span></div>
+        <div class="card stat grow"><b>${inPeriod(all, '30d').length}</b><span>in the last 30 days</span></div></div>
+      <div class="card"><p class="label">Migraines per month</p><div class="bars">${months.map(m =>
+        `<div class="col ${m.n ? '' : 'zero'}"><i style="height:${Math.round(m.n / max * 70)}%"></i><span>${m.label}</span></div>`).join('')}</div></div>
+      <div class="card"><p class="label">Most logged alongside a migraine</p>
+        ${top.length ? top.map(([k, n]) => `<div class="factor"><div><span>${esc(k)}</span><b>${n}×</b></div>
+          <div class="meter"><i style="width:${Math.round(n / topMax * 90)}%"></i></div></div>`).join('') : '<p class="muted">Log a few migraines to see what comes up most.</p>'}
+        <p class="note">Counts from your past entries only${all.some(l => l.demo) ? '. Sample data.' : '.'}</p></div>
+    </div>${nav('history')}`;
+  },
+
+  doctor() {
+    const all = logs(), st = stats(all);
+    if (!st) return `<div class="screen"><h1 style="margin-top:12px">Doctor summary</h1>
+      <div class="card"><p class="muted">No migraines logged in the last 6 months yet. Log one and a summary will appear here.</p></div></div>${nav('doctor')}`;
+    if (!S.sum) { S.sum = localSummary(st); draftWithAI(st); }
+    const s = S.sum, ed = S.editing ? 'true' : 'false';
+    return `<div class="screen"><h1 style="margin-top:12px">Doctor summary</h1>
+      <div class="banner">${s.ai ? '<b>Drafted by AI from your full history</b>' : s.loading ? '<b>Drafting with AI…</b>' : '<b>Drafted automatically from your entries</b>'}Review and edit before you share it.</div>
+      <div class="card sum">
+        <h3 contenteditable="${ed}" data-k="title">${esc(s.title)}</h3>
+        <p class="label">Frequency</p><div class="val" contenteditable="${ed}" data-k="frequency">${esc(s.frequency)}</div>
+        <p class="label">Intensity &amp; duration</p><div class="val" contenteditable="${ed}" data-k="intensity">${esc(s.intensity)}</div>
+        <p class="label">Logged alongside</p><div class="val" contenteditable="${ed}" data-k="alongside">${esc(s.alongside)}</div>
+        <p class="label">Questions for the doctor</p><div class="val q" contenteditable="true" data-k="questions" data-ph="Add your own before sending…">${esc(s.questions)}</div>
+      </div>
+      <div class="footer"><button class="btn outline" data-a="edit">${S.editing ? 'Done editing' : 'Edit text'}</button>
+        <button class="btn" data-a="email">Send by email</button></div>
+    </div>${nav('doctor')}`;
+  },
+
+  settings() {
+    const s = settings();
+    return `<div class="screen"><div class="stephead"><button class="back" data-a="go" data-v="home">‹ Back</button></div>
+      <h1>Settings</h1>
+      <div class="card"><label class="switch"><span>Show “Menstruation” option</span>
+        <input type="checkbox" id="menstruation" ${s.menstruation ? 'checked' : ''}></label></div>
+      <div class="card"><p class="label">Test data</p>
+        <p class="muted small" style="margin-bottom:12px">Fictional entries so you can explore History and the doctor summary.</p>
+        <div class="row"><button class="btn" data-a="demo">Load sample data</button>
+        <button class="btn outline" data-a="clear">Delete all</button></div></div>
+      <p class="muted small">Everything is stored only on this device.</p></div>`;
+  }
+};
+
+function step(n, title, sub, body, next, back, cta = 'Next') {
+  return `<div class="screen">
+    <div class="stephead"><button class="back" data-a="go" data-v="${back}">‹ Back</button><span class="progress">Step ${n} of 4</span></div>
+    <div class="segs">${[1,2,3,4].map(i => `<i class="${i <= n ? 'on' : ''}"></i>`).join('')}</div>
+    <h1>${esc(title)}</h1><p class="sub">${esc(sub)}</p>${body}
+    <div class="footer"><button class="btn" data-a="${next === 'save' ? 'save' : 'go'}" data-v="${next}">${cta}</button>
+      <button class="skip" data-a="${next === 'save' ? 'save' : 'go'}" data-v="${next}">Skip this step</button></div></div>`;
+}
+
+// ---------- AI draft (Cloudflare function → Gemini) ----------
+async function draftWithAI(st) {
+  S.sum.loading = true;
+  try {
+    const r = await fetch('/api/summary', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stats: st }), signal: AbortSignal.timeout(25000) });
+    if (!r.ok) throw new Error(r.status);
+    const j = await r.json();
+    if (!j.sections || S.editing || !S.sum) throw new Error('skip');
+    Object.assign(S.sum, { frequency: j.sections.frequency || S.sum.frequency, intensity: j.sections.intensity || S.sum.intensity,
+      alongside: j.sections.alongside || S.sum.alongside, ai: true });
+  } catch { /* keep the automatic text */ }
+  if (S.sum) S.sum.loading = false;
+  if (S.screen === 'doctor') render();
+}
+
+// ---------- Sample data (fictional, shaped like the Figma sample) ----------
 function demoLogs() {
-  const pick = (a, n) => [...a].sort(() => Math.random() - .5).slice(0, n);
-  return [...Array(9)].map((_, i) => {
-    const d = new Date(Date.now() - (i * 19 + 3) * 864e5); d.setHours(8 + (i * 3) % 10, 15, 0, 0);
-    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-    return {
-      id: 'demo' + i, demo: true, start: d.toISOString().slice(0, 16), intensity: 4 + (i * 7) % 6, ongoing: false,
-      routine: pick(['Irregular schedule', 'Late night', 'Trip', 'Skipped exercise'], 1 + i % 2),
-      food: pick(['Skipped a meal', 'Coffee', 'Chocolate', 'Little water'], 1 + i % 2),
-      feelings: pick(['Stressed', 'Tired', 'Anxious'], 1),
-      medication: i % 3 ? 'Took medication' : 'No medication', helped: pick(OPT.helped, 1 + i % 2), note: '',
-      auto: { sleepMin: i % 3 === 0 ? 330 : 420, screenMin: 300, weather: null, simulated: true }
-    };
+  const now = new Date();
+  const plan = [ // [days ago, intensity, hours, factors...]
+    [3, 7, 4, 'sleep', 'Stressed', 'Skipped a meal', 'Coffee'], [12, 8, 5, 'sleep', 'Stressed', 'Little water'], [24, 6, 3, 'sleep', 'Skipped a meal'],
+    [38, 7, 4, 'sleep', 'Stressed', 'Coffee'], [50, 6, 3, 'Stressed', 'Skipped a meal'], [75, 8, 5, 'sleep', 'Coffee'],
+    [105, 7, 4, 'Irregular schedule'], [130, 6, 3, 'sleep', 'Tired'], [150, 7, 4, 'Late night']
+  ];
+  const where = f => OPT.routine.includes(f) ? 'routine' : OPT.food.includes(f) ? 'food' : 'feelings';
+  return plan.map(([ago, intensity, durationH, ...f], i) => {
+    const d = new Date(now - ago * DAY); d.setHours(9 + i % 8, 0, 0, 0);
+    const e = { id: 'demo' + i, demo: true, start: localISO(d), intensity, durationH, ongoing: 'No', routine: [], food: [], feelings: [],
+      medication: i % 3 ? 'Took medication' : 'No medication', helped: i % 2 ? ['Dark room', 'Sleep'] : ['Rest'], note: '',
+      auto: { sleepMin: f.includes('sleep') ? 320 : 430, screenMin: 380, weather: null } };
+    f.filter(x => x !== 'sleep').forEach(x => e[where(x)].push(x));
+    return e;
   });
 }
 
 // ---------- Rendering & events ----------
 function render() {
-  const fn = screens[S.screen] || screens.home;
-  const html = fn();
   const app = document.getElementById('app');
-  const keepScroll = app.dataset.screen === S.screen ? window.scrollY : 0;
-  app.innerHTML = html; app.dataset.screen = S.screen;
-  window.scrollTo(0, keepScroll);
+  const keep = app.dataset.screen === S.screen ? window.scrollY : 0;
+  app.innerHTML = (screens[S.screen] || screens.home)(); app.dataset.screen = S.screen;
+  window.scrollTo(0, keep);
 }
+const syncNote = () => { const n = document.getElementById('note'); if (n) S.draft.note = n.value; };
 function go(screen) {
-  if (S.screen === 'log1') syncLog1();
   if (S.screen === 'log4') syncNote();
-  if (screen === 'doctor') S.summary = null;
-  S.screen = screen; render();
+  if (screen === 'doctor' && S.screen !== 'doctor') { S.sum = null; S.editing = false; }
+  S.screen = screen; render(); window.scrollTo(0, 0);
   if (screen === 'log2') loadAuto();
 }
-const syncLog1 = () => {
-  const s = document.getElementById('start'), o = document.getElementById('ongoing');
-  if (s && s.value) S.draft.start = s.value; if (o) S.draft.ongoing = o.checked;
-};
-const syncNote = () => { const n = document.getElementById('note'); if (n) S.draft.note = n.value; };
 
-document.addEventListener('click', async e => {
+document.addEventListener('click', e => {
   const el = e.target.closest('[data-a]'); if (!el) return;
   const a = el.dataset.a, v = el.dataset.v, D = S.draft;
   if (a === 'go') return go(v);
   if (a === 'start') { S.draft = blankDraft(); return go('log1'); }
-  if (a === 'cancel') { if (confirm('Discard this entry?')) { S.draft = blankDraft(); go('home'); } return; }
-  if (a === 'intensity') { syncLog1(); D.intensity = +v; return render(); }
+  if (a === 'intensity') { D.intensity = +v; return render(); }
   if (a === 'period') { S.period = v; return render(); }
   if (a === 'chip') {
     const g = el.dataset.g;
-    if (g === 'medication') D.medication = D.medication === v ? null : v;
+    if (SINGLE.includes(g)) D[g] = (g === 'medication' && D[g] === v) ? null : v;
     else {
       const arr = D[g], i = arr.indexOf(v);
       if (i >= 0) arr.splice(i, 1);
@@ -306,41 +326,32 @@ document.addEventListener('click', async e => {
         arr.push(v);
       }
     }
-    if (g === 'helped' || g === 'feelings') syncNote();
-    return render();
+    syncNote(); return render();
   }
   if (a === 'save') {
     syncNote();
+    const { started, ...rest } = D;
     const all = read('mc.logs', []);
-    all.push(Object.assign({ id: 'l' + Date.now() }, D));
-    saveLogs(all); S.draft = blankDraft(); S.summary = null; return go('saved');
+    all.push(Object.assign({ id: 'l' + Date.now(), start: startFrom(started) }, rest));
+    saveLogs(all); S.draft = blankDraft(); return go('saved');
   }
-  if (a === 'reset-summary') { S.summary = null; S.summaryAI = false; return render(); }
+  if (a === 'edit') { S.editing = !S.editing; return render(); }
   if (a === 'email') {
-    const body = document.getElementById('summary').value;
+    const s = S.sum;
+    const body = `${s.title}\n\nFrequency: ${s.frequency}\nIntensity & duration: ${s.intensity}\nLogged alongside: ${s.alongside}` +
+      (s.questions.trim() ? `\n\nQuestions for the doctor:\n${s.questions.trim()}` : '');
     location.href = `mailto:?subject=${encodeURIComponent('Migraine summary')}&body=${encodeURIComponent(body)}`; return;
   }
-  if (a === 'ai') {
-    S.summary = document.getElementById('summary').value; S.summaryBusy = true; render();
-    try {
-      const r = await fetch('/api/summary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stats: stats(logs()) }), signal: AbortSignal.timeout(30000) });
-      if (!r.ok) throw new Error(r.status);
-      const j = await r.json(); if (!j.text) throw new Error('empty');
-      S.summary = j.text; S.summaryAI = true;
-    } catch { toast('AI is unavailable right now. Kept the automatic text.'); }
-    S.summaryBusy = false; return render();
-  }
-  if (a === 'demo') { const rest = read('mc.logs', []).filter(l => !l.demo); saveLogs([...rest, ...demoLogs()]); toast('Demo data loaded'); return; }
-  if (a === 'clear') { if (confirm('Delete all migraine entries on this device?')) { saveLogs([]); S.summary = null; toast('All entries deleted'); } return; }
+  if (a === 'demo') { const rest = read('mc.logs', []).filter(l => !l.demo); saveLogs([...rest, ...demoLogs()]); toast('Sample data loaded'); return; }
+  if (a === 'clear') { if (confirm('Delete all migraine entries on this device?')) { saveLogs([]); toast('All entries deleted'); } return; }
 });
 document.addEventListener('change', e => {
   if (e.target.id === 'menstruation') write('mc.settings', Object.assign(settings(), { menstruation: e.target.checked }));
-  if (e.target.id === 'ongoing') S.draft.ongoing = e.target.checked;
-  if (e.target.id === 'start' && e.target.value) S.draft.start = e.target.value;
 });
 document.addEventListener('input', e => {
   if (e.target.id === 'note') S.draft.note = e.target.value;
-  if (e.target.id === 'summary') S.summary = e.target.value;
+  const k = e.target.dataset && e.target.dataset.k;
+  if (k && S.sum) S.sum[k] = e.target.innerText;
 });
 
 render();
