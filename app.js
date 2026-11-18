@@ -241,10 +241,10 @@ const screens = {
     const all = logs(), st = stats(all);
     if (!st) return `<div class="screen"><h1 style="margin-top:12px">Doctor summary</h1>
       <div class="card"><p class="muted">No migraines logged in the last 6 months yet. Log one and a summary will appear here.</p></div></div>${nav('doctor')}`;
-    if (!S.sum) { S.sum = localSummary(st); draftWithAI(st); }
+    if (!S.sum) S.sum = localSummary(st);
     const s = S.sum, ed = S.editing ? 'true' : 'false';
     return `<div class="screen"><h1 style="margin-top:12px">Doctor summary</h1>
-      <div class="banner">${s.ai ? '<b>Drafted by AI from your full history</b>' : s.loading ? '<b>Drafting with AI…</b>' : '<b>Drafted automatically from your entries</b>'}Review and edit before you share it.</div>
+      <div class="banner">${s.ai ? '<b>Drafted by AI from your full history</b>' : s.loading ? '<b>Improving with AI…</b>' : '<b>Drafted automatically from your entries</b>'}Review and edit before you share it.</div>
       <div class="card sum">
         <h3 contenteditable="${ed}" data-k="title">${esc(s.title)}</h3>
         <p class="label">Frequency</p><div class="val" contenteditable="${ed}" data-k="frequency">${esc(s.frequency)}</div>
@@ -252,7 +252,8 @@ const screens = {
         <p class="label">Logged alongside</p><div class="val" contenteditable="${ed}" data-k="alongside">${esc(s.alongside)}</div>
         <p class="label">Questions for the doctor</p><div class="val q" contenteditable="true" data-k="questions" data-ph="Add your own before sending…">${esc(s.questions)}</div>
       </div>
-      <div class="footer"><button class="btn outline" data-a="edit">${S.editing ? 'Done editing' : 'Edit text'}</button>
+      <div class="footer"><button class="btn soft" data-a="ai" ${s.ai || s.loading ? 'disabled' : ''}>${s.loading ? 'Improving…' : s.ai ? 'Improved with AI ✓' : 'Improve with AI'}</button>
+        <button class="btn outline" data-a="edit">${S.editing ? 'Done editing' : 'Edit text'}</button>
         <button class="btn" data-a="email">Send by email</button></div>
     </div>${nav('doctor')}`;
   },
@@ -295,7 +296,8 @@ function step(n, title, sub, body, next, back, cta = 'Next') {
 
 // ---------- AI draft (Cloudflare function → Gemini) ----------
 async function draftWithAI(st) {
-  S.sum.loading = true;
+  S.sum.loading = true; S.editing = false; render();
+  let ok = false;
   try {
     const r = await fetch('/api/summary', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ stats: st }), signal: AbortSignal.timeout(25000) });
@@ -303,9 +305,10 @@ async function draftWithAI(st) {
     const j = await r.json();
     if (!j.sections || S.editing || !S.sum) throw new Error('skip');
     Object.assign(S.sum, { frequency: j.sections.frequency || S.sum.frequency, intensity: j.sections.intensity || S.sum.intensity,
-      alongside: j.sections.alongside || S.sum.alongside, ai: true });
+      alongside: j.sections.alongside || S.sum.alongside, ai: true }); ok = true;
   } catch { /* keep the automatic text */ }
   if (S.sum) S.sum.loading = false;
+  if (!ok) toast('AI is unavailable right now. Kept the automatic text.');
   if (S.screen === 'doctor') render();
 }
 
@@ -389,6 +392,7 @@ document.addEventListener('click', e => {
   }
   if (a === 'dur') { D.durValue = Math.max(1, Math.min(999, (+D.durValue || 1) + +v)); return render(); }
   if (a === 'theme') { write('mc.settings', Object.assign(settings(), { theme: v })); applyTheme(); return render(); }
+  if (a === 'ai') { if (S.sum && !S.sum.loading) draftWithAI(stats(logs())); return; }
   if (a === 'edit') { S.editing = !S.editing; return render(); }
   if (a === 'email') {
     const s = S.sum;
