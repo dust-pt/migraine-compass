@@ -40,7 +40,7 @@ function optionsFor(g) {
   return [...base.filter(o => o !== 'Nothing unusual'), ...extra.filter(o => !base.includes(o)), ...tail];
 }
 const toHours = (v, u) => u === 'min' ? v / 60 : u === 'days' ? v * 24 : v;
-const fmtDur = h => h < 1 ? `${Math.round(h * 60)} min` : h >= 24 ? `${Math.round(h / 24 * 10) / 10} day${h >= 48 ? 's' : ''}` : `${Math.round(h * 10) / 10} h`;
+const fmtDur = h => h < 1 ? `${Math.round(h * 60)} min` : h >= 24 ? TX.days(Math.round(h / 24 * 10) / 10) : `${Math.round(h * 10) / 10} h`;
 function applyTheme() {
   const t = settings().theme;
   const dark = t === 'dark' || (t === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
@@ -72,13 +72,13 @@ const toast = msg => {
   const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show');
   clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2600);
 };
-const chip = (g, l, on) => `<button class="chip" data-a="chip" data-g="${g}" data-v="${esc(l)}" aria-pressed="${on}">${esc(l)}</button>`;
+const chip = (g, l, on) => `<button class="chip" data-a="chip" data-g="${g}" data-v="${esc(l)}" aria-pressed="${on}">${esc(L(l))}</button>`;
 const chips = (g, list, sel) => `<div class="chips">${list.map(l => chip(g, l, Array.isArray(sel) ? sel.includes(l) : sel === l)).join('')}</div>`;
 
 function nav(active) {
   const items = [['home', 'Home'], ['history', 'History'], ['doctor', 'Summary']];
   return `<nav class="tabs">${items.map(([id, lb]) =>
-    `<button data-a="go" data-v="${id}" ${id === active ? 'aria-current="page"' : ''}>${lb}</button>`).join('')}</nav>`;
+    `<button data-a="go" data-v="${id}" ${id === active ? 'aria-current="page"' : ''}>${L(lb)}</button>`).join('')}</nav>`;
 }
 
 // ---------- Automatic data ----------
@@ -95,14 +95,14 @@ async function fetchWeather() {
     const j = await (await fetch(u)).json();
     const [y, t] = j.daily.temperature_2m_mean; const rain = j.daily.precipitation_sum[1] > 0.2;
     const diff = Math.round(t - y);
-    return `${diff > 0 ? '+' : diff < 0 ? '−' : '±'}${Math.abs(diff)} °C${rain ? ', rain' : ''}`;
+    return `${diff > 0 ? '+' : diff < 0 ? '−' : '±'}${Math.abs(diff)} °C${rain ? ', ' + L('rain') : ''}`;
   } catch { return null; }
 }
 async function loadAuto() {
   const d = S.draft; if (d.auto) return;
   d.auto = sampleAuto(); render();
   const w = await fetchWeather();
-  d.auto.weather = w || 'Location off';
+  d.auto.weather = w || L('Location off');
   if (S.screen === 'log1') render();
 }
 
@@ -121,7 +121,7 @@ const inPeriod = (all, p) => {
   const cut = p === '30d' ? new Date(now - 30 * DAY) : p === '6m' ? new Date(now.getFullYear(), now.getMonth() - 5, 1) : new Date(0);
   return all.filter(l => new Date(l.start) >= cut);
 };
-const fmtMonth = d => d.toLocaleDateString('en-GB', { month: 'short' });
+const fmtMonth = d => d.toLocaleDateString(LOC, { month: 'short' }).replace('.', '');
 function stats(all) {
   const list = inPeriod(all, '6m');
   if (!list.length) return null;
@@ -136,18 +136,18 @@ function stats(all) {
     intensityRange: [q(ints, .2), q(ints, .8)],
     durationRangeHours: durs.length ? [q(durs, .2), q(durs, .8)] : null,
     medicationTaken: list.filter(l => l.medication === 'Took medication').length,
-    topFactors: topFactors(list).slice(0, 4).map(([factor, times]) => ({ factor, times })),
-    helped: Object.entries(helped).sort((a, b) => b[1] - a[1]).map(([what, times]) => ({ what, times }))
+    topFactors: topFactors(list).slice(0, 4).map(([factor, times]) => ({ factor: L(factor), times })),
+    helped: Object.entries(helped).sort((a, b) => b[1] - a[1]).map(([what, times]) => ({ what: L(what), times }))
   };
 }
 function localSummary(st) {
   const [a, b] = st.intensityRange, d = st.durationRangeHours;
   const along = st.topFactors.map((f, i) => `${i ? f.factor.charAt(0).toLowerCase() + f.factor.slice(1) : f.factor} (${f.times}×)`).join(', ');
   return {
-    title: `Migraine summary · ${st.period}`,
-    frequency: `${st.count6m} migraine${st.count6m === 1 ? '' : 's'} in 6 months, ${st.last30} in the last 30 days.`,
-    intensity: `Usually ${a === b ? a : `${a}–${b}`} out of 10${d ? `, lasting about ${d[0] === d[1] ? d[0] : `${d[0]}–${d[1]}`} hours` : ''}.`,
-    alongside: along ? along + '.' : 'Nothing logged alongside yet.',
+    title: `${L('Migraine summary')} · ${st.period}`,
+    frequency: TX.sumFreq(st.count6m, st.last30),
+    intensity: TX.sumInt(a === b ? a : `${a}–${b}`, d ? (d[0] === d[1] ? d[0] : `${d[0]}–${d[1]}`) : null),
+    alongside: along ? along + '.' : L('Nothing logged alongside yet.'),
     questions: '', ai: false
   };
 }
@@ -157,18 +157,18 @@ const screens = {
   home() {
     const all = logs(), last = all[0];
     const month = all.filter(l => l.start.startsWith(monthKey(new Date()))).length;
-    const lastTxt = last ? [new Date(last.start).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }),
-      `intensity ${last.intensity}/10`, last.durationH ? `about ${fmtDur(last.durationH)}` : null].filter(Boolean).join(' · ') : 'Nothing logged yet';
+    const lastTxt = last ? [new Date(last.start).toLocaleDateString(LOC, { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, ''),
+      TX.intensity(last.intensity), last.durationH ? TX.about(fmtDur(last.durationH)) : null].filter(Boolean).join(' · ') : L('Nothing logged yet');
     return `<div class="screen">
-      <div class="brand"><span>Migraine Compass</span><button class="textlink small" style="margin:0" data-a="go" data-v="settings">Settings</button></div>
-      <h1>How are you today?</h1>
-      <button class="hero" data-a="start"><b>Log a migraine</b><span>Three quick steps: when and routine, food and feelings, what helped.</span><i>Start ›</i></button>
-      <div class="card"><p class="label">Last migraine</p><p>${esc(lastTxt)}</p></div>
-      <div class="card"><p class="label">This month</p><p class="big">${month} migraine${month === 1 ? '' : 's'} logged</p>
-        <button class="textlink" data-a="go" data-v="history">See History ›</button></div>
-      <div class="card"><p class="big" style="margin-bottom:6px">Doctor visit coming up?</p>
-        <p class="muted" style="margin-bottom:12px">The app reads your full history and drafts a summary you can review and email.</p>
-        <button class="btn outline" data-a="go" data-v="doctor">Prepare doctor summary</button></div>
+      <div class="brand"><span>Migraine Compass</span><button class="textlink small" style="margin:0" data-a="go" data-v="settings">${L('Settings')}</button></div>
+      <h1>${L('How are you today?')}</h1>
+      <button class="hero" data-a="start"><b>${L('Log a migraine')}</b><span>${L('Three quick steps: when and routine, food and feelings, what helped.')}</span><i>${L('Start ›')}</i></button>
+      <div class="card"><p class="label">${L('Last migraine')}</p><p>${esc(lastTxt)}</p></div>
+      <div class="card"><p class="label">${L('This month')}</p><p class="big">${TX.logged(month)}</p>
+        <button class="textlink" data-a="go" data-v="history">${L('See History ›')}</button></div>
+      <div class="card"><p class="big" style="margin-bottom:6px">${L('Doctor visit coming up?')}</p>
+        <p class="muted" style="margin-bottom:12px">${L('The app reads your full history and drafts a summary you can review and email.')}</p>
+        <button class="btn outline" data-a="go" data-v="doctor">${L('Prepare doctor summary')}</button></div>
     </div>${nav('home')}`;
   },
 
@@ -176,47 +176,47 @@ const screens = {
     const d = S.draft, a = d.auto;
     const list = OPT.routine.filter(o => settings().menstruation || o !== 'Menstruation');
     return step(1, 'When did it start?', 'How strong it is, and what changed in the last 24 hours.', `
-      <div class="autobox compact"><p class="label">Filled in automatically</p>
-        <div class="autogrid"><div><small>Sleep last night</small><b>${a ? hm(a.sleepMin) : '…'}</b></div>
-          <div><small>Weather</small><b>${a && a.weather ? esc(a.weather) : '…'}</b></div>
-          <div><small>Screen time</small><b>${a ? hm(a.screenMin) : '…'}</b></div></div>
-        <p class="note">With your permission: smartwatch, weather change since yesterday, phone. Sample data.</p></div>
-      <div class="card"><p class="label">Started</p>${chips('started', OPT.started, d.started)}</div>
-      <div class="card"><p class="label">Intensity (1 = mild, 10 = severe)</p>
+      <div class="autobox compact"><p class="label">${L('Filled in automatically')}</p>
+        <div class="autogrid"><div><small>${L('Sleep last night')}</small><b>${a ? hm(a.sleepMin) : '…'}</b></div>
+          <div><small>${L('Weather')}</small><b>${a && a.weather ? esc(a.weather) : '…'}</b></div>
+          <div><small>${L('Screen time')}</small><b>${a ? hm(a.screenMin) : '…'}</b></div></div>
+        <p class="note">${L('With your permission: smartwatch, weather change since yesterday, phone. Sample data.')}</p></div>
+      <div class="card"><p class="label">${L('Started')}</p>${chips('started', OPT.started, d.started)}</div>
+      <div class="card"><p class="label">${L('Intensity (1 = mild, 10 = severe)')}</p>
         <div class="circles">${[1,2,3,4,5,6,7,8,9,10].map(n =>
           `<button class="chip" data-a="intensity" data-v="${n}" aria-pressed="${d.intensity === n}">${n}</button>`).join('')}</div></div>
-      <div class="card"><p class="label">Still ongoing?</p>${chips('ongoing', OPT.ongoing, d.ongoing)}
-        ${d.ongoing === 'No' ? `<div class="duration"><p class="label" style="margin-top:14px">How long did it last?</p>
-          <div class="durrow"><div class="stepper"><button data-a="dur" data-v="-1" aria-label="Less">−</button>
+      <div class="card"><p class="label">${L('Still ongoing?')}</p>${chips('ongoing', OPT.ongoing, d.ongoing)}
+        ${d.ongoing === 'No' ? `<div class="duration"><p class="label" style="margin-top:14px">${L('How long did it last?')}</p>
+          <div class="durrow"><div class="stepper"><button data-a="dur" data-v="-1" aria-label="${L('Less')}">−</button>
             <input id="durValue" type="number" inputmode="numeric" min="1" max="999" value="${d.durValue}">
-            <button data-a="dur" data-v="1" aria-label="More">+</button></div>
+            <button data-a="dur" data-v="1" aria-label="${L('More')}">+</button></div>
             ${chips('unit', UNITS, d.unit)}</div></div>` : ''}</div>
-      <div class="card"><p class="label">Any change in routine?</p>${chips('routine', list, d.routine)}
-        <p class="note">Menstruation is optional and only appears if you turn it on in Settings.</p></div>`, 'log3', 'home');
+      <div class="card"><p class="label">${L('Any change in routine?')}</p>${chips('routine', list, d.routine)}
+        <p class="note">${L('Menstruation is optional and only appears if you turn it on in Settings.')}</p></div>`, 'log3', 'home');
   },
 
   log3() {
     const d = S.draft;
     return step(2, 'Food, drink and feelings', 'Select what applies. Everything is optional.', `
-      <div class="card"><p class="label">Food and drink</p>${chips('food', optionsFor('food'), d.food)}</div>
-      <div class="card"><p class="label">How are you feeling?</p>${chips('feelings', optionsFor('feelings'), d.feelings)}</div>`, 'log4', 'log1');
+      <div class="card"><p class="label">${L('Food and drink')}</p>${chips('food', optionsFor('food'), d.food)}</div>
+      <div class="card"><p class="label">${L('How are you feeling?')}</p>${chips('feelings', optionsFor('feelings'), d.feelings)}</div>`, 'log4', 'log1');
   },
 
   log4() {
     const d = S.draft;
     return step(3, 'What happened after?', 'Medication and what helped. Everything here is optional.', `
-      <div class="card"><p class="label">Medication taken</p>${chips('medication', OPT.medication, d.medication)}</div>
-      <div class="card"><p class="label">What helped</p>${chips('helped', OPT.helped, d.helped)}</div>
-      <div class="card"><p class="label">Note (optional)</p>
-        <textarea id="note" placeholder="Tap to write anything else worth remembering…">${esc(d.note)}</textarea></div>`, 'save', 'log3', 'Save migraine');
+      <div class="card"><p class="label">${L('Medication taken')}</p>${chips('medication', OPT.medication, d.medication)}</div>
+      <div class="card"><p class="label">${L('What helped')}</p>${chips('helped', OPT.helped, d.helped)}</div>
+      <div class="card"><p class="label">${L('Note (optional)')}</p>
+        <textarea id="note" placeholder="${L('Tap to write anything else worth remembering…')}">${esc(d.note)}</textarea></div>`, 'save', 'log3', 'Save migraine');
   },
 
   saved() {
     return `<div class="screen"><div class="center">
-      <div class="check">✓</div><h1 style="font-size:26px">Migraine logged</h1>
-      <p class="muted">It has been added to your History. Take care of yourself.</p></div>
-      <div class="footer"><button class="btn" data-a="go" data-v="history">Go to History</button>
-        <button class="btn outline" data-a="go" data-v="home">Back to Home</button></div></div>`;
+      <div class="check">✓</div><h1 style="font-size:26px">${L('Migraine logged')}</h1>
+      <p class="muted">${L('It has been added to your History. Take care of yourself.')}</p></div>
+      <div class="footer"><button class="btn" data-a="go" data-v="history">${L('Go to History')}</button>
+        <button class="btn outline" data-a="go" data-v="home">${L('Back to Home')}</button></div></div>`;
   },
 
   history() {
@@ -227,79 +227,80 @@ const screens = {
     });
     const max = Math.max(1, ...months.map(m => m.n));
     const top = topFactors(list).slice(0, 4), topMax = top.length ? top[0][1] : 1;
-    const per = { '30d': 'in 30 days', '6m': 'in 6 months', all: 'in total' }[S.period];
-    return `<div class="screen"><h1 style="margin-top:12px">History</h1>
+    const per = TX.per(S.period);
+    return `<div class="screen"><h1 style="margin-top:12px">${L('History')}</h1>
       <div class="seg" role="group" aria-label="Period">${[['30d', '30 days'], ['6m', '6 months'], ['all', 'All time']].map(([k, l]) =>
-        `<button data-a="period" data-v="${k}" aria-pressed="${S.period === k}">${l}</button>`).join('')}</div>
+        `<button data-a="period" data-v="${k}" aria-pressed="${S.period === k}">${L(l)}</button>`).join('')}</div>
       <div class="row">
-        <div class="card stat grow"><b>${list.length}</b><span>migraine${list.length === 1 ? '' : 's'} ${per}</span></div>
-        <div class="card stat grow"><b>${inPeriod(all, '30d').length}</b><span>in the last 30 days</span></div></div>
-      <div class="card"><p class="label">Migraines per month</p><div class="bars">${months.map(m =>
+        <div class="card stat grow"><b>${list.length}</b><span>${TX.migraines(list.length).replace(/^\d+ /, '')} ${per}</span></div>
+        <div class="card stat grow"><b>${inPeriod(all, '30d').length}</b><span>${L('in the last 30 days')}</span></div></div>
+      <div class="card"><p class="label">${L('Migraines per month')}</p><div class="bars">${months.map(m =>
         `<div class="col ${m.n ? '' : 'zero'}"><i style="height:${Math.round(m.n / max * 70)}%"></i><span>${m.label}</span></div>`).join('')}</div></div>
-      <div class="card"><p class="label">Most logged alongside a migraine</p>
-        ${top.length ? top.map(([k, n]) => `<div class="factor"><div><span>${esc(k)}</span><b>${n}×</b></div>
-          <div class="meter"><i style="width:${Math.round(n / topMax * 90)}%"></i></div></div>`).join('') : '<p class="muted">Log a few migraines to see what comes up most.</p>'}
-        <p class="note">Counts from your past entries only${all.some(l => l.demo) ? '. Sample data.' : '.'}</p></div>
+      <div class="card"><p class="label">${L('Most logged alongside a migraine')}</p>
+        ${top.length ? top.map(([k, n]) => `<div class="factor"><div><span>${esc(L(k))}</span><b>${n}×</b></div>
+          <div class="meter"><i style="width:${Math.round(n / topMax * 90)}%"></i></div></div>`).join('') : `<p class="muted">${L('Log a few migraines to see what comes up most.')}</p>`}
+        <p class="note">${L(all.some(l => l.demo) ? 'Counts from your past entries only. Sample data.' : 'Counts from your past entries only.')}</p></div>
     </div>${nav('history')}`;
   },
 
   doctor() {
     const all = logs(), st = stats(all);
-    if (!st) return `<div class="screen"><h1 style="margin-top:12px">Doctor summary</h1>
-      <div class="card"><p class="muted">No migraines logged in the last 6 months yet. Log one and a summary will appear here.</p></div></div>${nav('doctor')}`;
+    if (!st) return `<div class="screen"><h1 style="margin-top:12px">${L('Doctor summary')}</h1>
+      <div class="card"><p class="muted">${L('No migraines logged in the last 6 months yet. Log one and a summary will appear here.')}</p></div></div>${nav('doctor')}`;
     if (!S.sum) S.sum = localSummary(st);
     const s = S.sum, ed = S.editing ? 'true' : 'false';
-    return `<div class="screen"><h1 style="margin-top:12px">Doctor summary</h1>
-      <div class="banner">${s.ai ? '<b>Drafted by AI from your full history</b>' : s.loading ? '<b>Improving with AI…</b>' : '<b>Drafted automatically from your entries</b>'}Review and edit before you share it.</div>
+    return `<div class="screen"><h1 style="margin-top:12px">${L('Doctor summary')}</h1>
+      <div class="banner"><b>${L(s.ai ? 'Drafted by AI from your full history' : s.loading ? 'Improving with AI…' : 'Drafted automatically from your entries')}</b>${L('Review and edit before you share it.')}</div>
       <div class="card sum">
         <h3 contenteditable="${ed}" data-k="title">${esc(s.title)}</h3>
-        <p class="label">Frequency</p><div class="val" contenteditable="${ed}" data-k="frequency">${esc(s.frequency)}</div>
-        <p class="label">Intensity &amp; duration</p><div class="val" contenteditable="${ed}" data-k="intensity">${esc(s.intensity)}</div>
-        <p class="label">Logged alongside</p><div class="val" contenteditable="${ed}" data-k="alongside">${esc(s.alongside)}</div>
-        <p class="label">Questions for the doctor</p><div class="val q" contenteditable="true" data-k="questions" data-ph="Add your own before sending…">${esc(s.questions)}</div>
+        <p class="label">${L('Frequency')}</p><div class="val" contenteditable="${ed}" data-k="frequency">${esc(s.frequency)}</div>
+        <p class="label">${esc(L('Intensity & duration'))}</p><div class="val" contenteditable="${ed}" data-k="intensity">${esc(s.intensity)}</div>
+        <p class="label">${L('Logged alongside')}</p><div class="val" contenteditable="${ed}" data-k="alongside">${esc(s.alongside)}</div>
+        <p class="label">${L('Questions for the doctor')}</p><div class="val q" contenteditable="true" data-k="questions" data-ph="${L('Add your own before sending…')}">${esc(s.questions)}</div>
       </div>
-      <div class="footer"><button class="btn soft" data-a="ai" ${s.ai || s.loading ? 'disabled' : ''}>${s.loading ? 'Improving…' : s.ai ? 'Improved with AI ✓' : 'Improve with AI'}</button>
-        <button class="btn outline" data-a="edit">${S.editing ? 'Done editing' : 'Edit text'}</button>
-        <button class="btn" data-a="email">Send by email</button></div>
+      <div class="footer"><button class="btn soft" data-a="ai" ${s.ai || s.loading ? 'disabled' : ''}>${L(s.loading ? 'Improving…' : s.ai ? 'Improved with AI ✓' : 'Improve with AI')}</button>
+        <button class="btn outline" data-a="edit">${L(S.editing ? 'Done editing' : 'Edit text')}</button>
+        <button class="btn" data-a="email">${L('Send by email')}</button></div>
     </div>${nav('doctor')}`;
   },
 
   settings() {
     const s = settings();
-    return `<div class="screen"><div class="stephead"><button class="back" data-a="go" data-v="home">‹ Back</button></div>
-      <h1>Settings</h1>
-      <div class="card"><p class="label">Night mode</p>
-        <p class="muted small" style="margin-bottom:10px">Darker, softer colours for light sensitivity.</p>
+    return `<div class="screen"><div class="stephead"><button class="back" data-a="go" data-v="home">${L('‹ Back')}</button></div>
+      <h1>${L('Settings')}</h1>
+      <div class="card"><p class="label">${L('Night mode')}</p>
+        <p class="muted small" style="margin-bottom:10px">${L('Darker, softer colours for light sensitivity.')}</p>
         <div class="chips">${[['auto', 'Follow phone'], ['dark', 'On'], ['light', 'Off']].map(([k, l]) =>
-          `<button class="chip" data-a="theme" data-v="${k}" aria-pressed="${s.theme === k}">${l}</button>`).join('')}</div></div>
-      <div class="card"><label class="switch"><span>Show “Menstruation” option</span>
+          `<button class="chip" data-a="theme" data-v="${k}" aria-pressed="${s.theme === k}">${L(l)}</button>`).join('')}</div></div>
+      <div class="card"><label class="switch"><span>${L('Show “Menstruation” option')}</span>
         <input type="checkbox" id="menstruation" ${s.menstruation ? 'checked' : ''}></label></div>
-      <div class="card"><p class="label">Extra options</p>
-        <p class="muted small" style="margin-bottom:10px">Turn on options that are not in the app by default. They appear in the “Food, drink and feelings” step.</p>
-        ${['food', 'feelings'].map(g => `<p class="small" style="font-weight:600;margin:10px 0 8px">${SECTION[g]}</p>
+      <div class="card"><p class="label">${L('Extra options')}</p>
+        <p class="muted small" style="margin-bottom:10px">${L('Turn on options that are not in the app by default. They appear in the “Food, drink and feelings” step.')}</p>
+        ${['food', 'feelings'].map(g => `<p class="small" style="font-weight:600;margin:10px 0 8px">${L(SECTION[g])}</p>
           <div class="chips">${EXTRA[g].map(o =>
-            `<button class="chip" data-a="extra" data-g="${g}" data-v="${esc(o)}" aria-pressed="${s.extras[g].includes(o)}">${esc(o)}</button>`).join('')}
-          ${s.custom[g].map(o => `<span class="chipwrap"><button class="chip" data-a="extra" data-g="${g}" data-v="${esc(o)}" aria-pressed="${s.extras[g].includes(o)}">${esc(o)}</button><button class="del" data-a="removeCustom" data-g="${g}" data-v="${esc(o)}" aria-label="Delete ${esc(o)}">×</button></span>`).join('')}</div>`).join('')}
-        <p class="note">Tap an option to turn it on or off. Options you added yourself can be deleted with ×.</p>
-        <p class="small" style="font-weight:600;margin:14px 0 8px">Add your own</p>
-        <div class="addrow"><input id="customText" type="text" maxlength="30" placeholder="e.g. Blurred vision">
-          <select id="customGroup"><option value="feelings">Feelings</option><option value="food">Food and drink</option></select>
-          <button class="btn small-btn" data-a="addCustom">Add</button></div></div>
-      <div class="card"><p class="label">Test data</p>
-        <p class="muted small" style="margin-bottom:12px">Fictional entries so you can explore History and the doctor summary.</p>
-        <div class="row"><button class="btn" data-a="demo">Load sample data</button>
-        <button class="btn outline" data-a="clear">Delete all</button></div></div>
-      <p class="muted small">Everything is stored only on this device.</p></div>`;
+            `<button class="chip" data-a="extra" data-g="${g}" data-v="${esc(o)}" aria-pressed="${s.extras[g].includes(o)}">${esc(L(o))}</button>`).join('')}
+          ${s.custom[g].map(o => `<span class="chipwrap"><button class="chip" data-a="extra" data-g="${g}" data-v="${esc(o)}" aria-pressed="${s.extras[g].includes(o)}">${esc(o)}</button><button class="del" data-a="removeCustom" data-g="${g}" data-v="${esc(o)}" aria-label="${esc(TX.deleteLabel(o))}">×</button></span>`).join('')}</div>`).join('')}
+        <p class="note">${L('Tap an option to turn it on or off. Options you added yourself can be deleted with ×.')}</p>
+        <p class="small" style="font-weight:600;margin:14px 0 8px">${L('Add your own')}</p>
+        <div class="addrow"><input id="customText" type="text" maxlength="30" placeholder="${L('e.g. Blurred vision')}">
+          <select id="customGroup"><option value="feelings">${L('Feelings')}</option><option value="food">${L('Food and drink')}</option></select>
+          <button class="btn small-btn" data-a="addCustom">${L('Add')}</button></div></div>
+      <div class="card"><p class="label">${L('Test data')}</p>
+        <p class="muted small" style="margin-bottom:12px">${L('Fictional entries so you can explore History and the doctor summary.')}</p>
+        <div class="row"><button class="btn" data-a="demo">${L('Load sample data')}</button>
+        <button class="btn outline" data-a="clear">${L('Delete all')}</button></div></div>
+      <p class="muted small">${L('Everything is stored only on this device.')}</p></div>`;
   }
 };
 
 function step(n, title, sub, body, next, back, cta = 'Next') {
+  title = L(title); sub = L(sub); cta = L(cta);
   return `<div class="screen">
-    <div class="stephead"><button class="back" data-a="go" data-v="${back}">‹ Back</button><span class="progress">Step ${n} of 3</span></div>
+    <div class="stephead"><button class="back" data-a="go" data-v="${back}">${L('‹ Back')}</button><span class="progress">${TX.stepOf(n, 3)}</span></div>
     <div class="segs">${[1,2,3].map(i => `<i class="${i <= n ? 'on' : ''}"></i>`).join('')}</div>
     <h1>${esc(title)}</h1><p class="sub">${esc(sub)}</p>${body}
     <div class="footer"><button class="btn" data-a="${next === 'save' ? 'save' : 'go'}" data-v="${next}">${cta}</button>
-      <button class="skip" data-a="${next === 'save' ? 'save' : 'go'}" data-v="${next}">Skip this step</button></div></div>`;
+      <button class="skip" data-a="${next === 'save' ? 'save' : 'go'}" data-v="${next}">${L('Skip this step')}</button></div></div>`;
 }
 
 // ---------- AI draft (Cloudflare function → Gemini) ----------
@@ -308,7 +309,7 @@ async function draftWithAI(st) {
   let ok = false;
   try {
     const r = await fetch('/api/summary', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stats: st }), signal: AbortSignal.timeout(25000) });
+      body: JSON.stringify({ stats: st, lang: LANG }), signal: AbortSignal.timeout(25000) });
     if (!r.ok) throw new Error(r.status);
     const j = await r.json();
     if (!j.sections || S.editing || !S.sum) throw new Error('skip');
@@ -316,7 +317,7 @@ async function draftWithAI(st) {
       alongside: j.sections.alongside || S.sum.alongside, ai: true }); ok = true;
   } catch { /* keep the automatic text */ }
   if (S.sum) S.sum.loading = false;
-  if (!ok) toast('AI is unavailable right now. Kept the automatic text.');
+  if (!ok) toast(L('AI is unavailable right now. Kept the automatic text.'));
   if (S.screen === 'doctor') render();
 }
 
@@ -393,17 +394,17 @@ document.addEventListener('click', e => {
   if (a === 'addCustom') {
     const t = document.getElementById('customText').value.trim().replace(/\s+/g, ' ');
     const g = document.getElementById('customGroup').value;
-    if (!t) return toast('Type an option first');
+    if (!t) return toast(L('Type an option first'));
     const ex = settings().extras; ex[g] = ex[g] || [];
     const cu = settings().custom; cu[g] = cu[g] || [];
-    if (OPT[g].includes(t) || EXTRA[g].includes(t) || cu[g].includes(t)) return toast('That option already exists');
+    if (OPT[g].includes(t) || EXTRA[g].includes(t) || cu[g].includes(t)) return toast(L('That option already exists'));
     cu[g].push(t); ex[g].push(t);
-    saveSettings({ extras: ex, custom: cu }); toast(`Added to ${SECTION[g]}`); return render();
+    saveSettings({ extras: ex, custom: cu }); toast(TX.added(L(SECTION[g]))); return render();
   }
   if (a === 'removeCustom') {
     const g = el.dataset.g, st = settings();
     st.custom[g] = st.custom[g].filter(o => o !== v); st.extras[g] = st.extras[g].filter(o => o !== v);
-    saveSettings({ custom: st.custom, extras: st.extras }); toast(`Deleted “${v}”`); return render();
+    saveSettings({ custom: st.custom, extras: st.extras }); toast(TX.deleted(L(v))); return render();
   }
   if (a === 'dur') { D.durValue = Math.max(1, Math.min(999, (+D.durValue || 1) + +v)); return render(); }
   if (a === 'theme') { write('mc.settings', Object.assign(settings(), { theme: v })); applyTheme(); return render(); }
@@ -411,12 +412,12 @@ document.addEventListener('click', e => {
   if (a === 'edit') { S.editing = !S.editing; return render(); }
   if (a === 'email') {
     const s = S.sum;
-    const body = `${s.title}\n\nFrequency: ${s.frequency}\nIntensity & duration: ${s.intensity}\nLogged alongside: ${s.alongside}` +
-      (s.questions.trim() ? `\n\nQuestions for the doctor:\n${s.questions.trim()}` : '');
-    location.href = `mailto:?subject=${encodeURIComponent('Migraine summary')}&body=${encodeURIComponent(body)}`; return;
+    const body = `${s.title}\n\n${L('Frequency')}: ${s.frequency}\n${L('Intensity & duration')}: ${s.intensity}\n${L('Logged alongside')}: ${s.alongside}` +
+      (s.questions.trim() ? `\n\n${L('Questions for the doctor')}:\n${s.questions.trim()}` : '');
+    location.href = `mailto:?subject=${encodeURIComponent(L('Migraine summary'))}&body=${encodeURIComponent(body)}`; return;
   }
-  if (a === 'demo') { const rest = read('mc.logs', []).filter(l => !l.demo); saveLogs([...rest, ...demoLogs()]); toast('Sample data loaded'); return; }
-  if (a === 'clear') { if (confirm('Delete all migraine entries on this device?')) { saveLogs([]); toast('All entries deleted'); } return; }
+  if (a === 'demo') { const rest = read('mc.logs', []).filter(l => !l.demo); saveLogs([...rest, ...demoLogs()]); toast(L('Sample data loaded')); return; }
+  if (a === 'clear') { if (confirm(L('Delete all migraine entries on this device?'))) { saveLogs([]); toast(L('All entries deleted')); } return; }
 });
 document.addEventListener('change', e => {
   if (e.target.id === 'menstruation') write('mc.settings', Object.assign(settings(), { menstruation: e.target.checked }));

@@ -18,15 +18,15 @@ export async function onRequestPost({ request, env }) {
   if (recent.length >= 5) return json({ error: 'rate_limited' }, 429);
   hits.set(ip, [...recent, now]);
 
-  let stats;
-  try { ({ stats } = await request.json()); } catch { return json({ error: 'bad_request' }, 400); }
+  let stats, lang;
+  try { ({ stats, lang } = await request.json()); } catch { return json({ error: 'bad_request' }, 400); }
   if (!stats || typeof stats !== 'object' || JSON.stringify(stats).length > 4000) return json({ error: 'bad_request' }, 400);
 
   const prompt =
     'You help a patient prepare for a doctor visit. From these migraine statistics, write three short sections in plain ' +
-    'English, one sentence each, no diagnosis, no advice, no invented facts, and keep every number exactly as given. ' +
+    (lang === 'pt' ? 'European Portuguese (pt-PT, not Brazilian Portuguese), ' : 'English, ') + 'one sentence each, no diagnosis, no advice, no invented facts, and keep every number exactly as given. ' +
     'Return JSON with keys "frequency" (how many and how recent), "intensity" (usual intensity range out of 10 and, if given, ' +
-    'duration in hours), and "alongside" (the most logged factors with their counts, e.g. "Slept under 6 h (6×)"). Statistics:\n' +
+    'duration in hours), and "alongside" (the most logged factors with their counts, e.g. "Slept under 6 h (6×)", keeping the factor names as given). Statistics:\n' +
     JSON.stringify(stats);
 
   const model = env.GEMINI_MODEL || MODEL_DEFAULT;
