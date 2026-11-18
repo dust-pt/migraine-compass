@@ -53,7 +53,7 @@ if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListen
 // ---------- State ----------
 const blankDraft = () => ({ started: 'Now', intensity: 7, ongoing: 'Yes', durValue: 4, unit: 'hours', routine: [], food: [], feelings: [],
   medication: null, helped: [], note: '', auto: null });
-const S = { screen: 'home', draft: blankDraft(), period: '6m', sum: null, editing: false, month: null, end: null, openMig: null };
+const S = { screen: 'home', draft: blankDraft(), period: '6m', sum: null, editing: false, month: null, end: null, openMig: null, lastOpen: false };
 
 // ---------- Helpers ----------
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -208,8 +208,11 @@ const screens = {
       ${all.filter(l => l.ongoing === 'Yes').map(l => `<div class="card ongoing"><div><p class="label" style="margin-bottom:4px">${L('Migraine in progress')}</p>
         <p>${esc(TX.since(new Date(l.start).toLocaleString(LOC, { weekday: 'short', hour: '2-digit', minute: '2-digit' }).replace(/\./g, ''), fmtDur(elapsedH(l)).replace(' ', '\u00a0')))}</p></div>
         <button class="btn small-btn" data-a="endStart" data-v="${l.id}">${L('It ended')}</button></div>`).join('')}
-      <button class="hero" data-a="start"><b>${L('Log a migraine')}</b><span>${L('Three quick steps: when and routine, food and feelings, what helped.')}</span><i>${L('Start ›')}</i></button>
-      <div class="card"><p class="label">${L('Last migraine')}</p><p>${esc(lastTxt)}</p></div>
+      <button class="hero" data-a="start"><b>${L('Log a migraine')}</b><span>${L('Three quick steps: when and routine, food and feelings, what helped.')}</span><small class="privacy">${L('Nothing is saved in the cloud: everything stays on this phone.')}</small><i>${L('Start ›')}</i></button>
+      ${last ? `<div class="card lastcard${S.lastOpen ? ' open' : ''}"><button class="lasthead" data-a="lastToggle" aria-expanded="${!!S.lastOpen}">
+          <span><span class="label" style="display:block">${L('Last migraine')}</span><span>${esc(lastTxt)}</span></span><span class="chev">›</span></button>
+          ${S.lastOpen ? migDetail(last) : ''}</div>`
+        : `<div class="card"><p class="label">${L('Last migraine')}</p><p>${esc(lastTxt)}</p></div>`}
       <div class="card"><p class="label">${L('This month')}</p><p class="big">${TX.logged(month)}</p>
         <button class="textlink" data-a="go" data-v="history">${L('See History ›')}</button></div>
       <div class="card"><p class="big" style="margin-bottom:6px">${L('Doctor visit coming up?')}</p>
@@ -432,6 +435,7 @@ document.addEventListener('click', e => {
     S.month = v; S.openMig = null; document.getElementById('monthBack').innerHTML = monthDetail(v);
     document.getElementById('monthFlip').classList.add('flipped'); return;
   }
+  if (a === 'lastToggle') { S.lastOpen = !S.lastOpen; return render(); }
   if (a === 'mig') { S.openMig = S.openMig === v ? null : v; document.getElementById('monthBack').innerHTML = monthDetail(S.month); return; }
   if (a === 'monthBack') { S.month = null; document.getElementById('monthFlip').classList.remove('flipped'); return; }
   if (a === 'endStart') {

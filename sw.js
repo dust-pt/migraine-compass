@@ -1,5 +1,5 @@
 // Service worker: app shell cached for offline use. Bump VERSION to force an update.
-const VERSION = 'mc-v13';
+const VERSION = 'mc-v14';
 const SHELL = [
   './', 'index.html', 'styles.css', 'i18n.js', 'app.js', 'manifest.webmanifest',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'
