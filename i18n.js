@@ -61,11 +61,15 @@ const PT = {
   'That option already exists': 'Essa opção já existe', 'Sample data loaded': 'Dados de exemplo carregados', 'All entries deleted': 'Todos os registos foram apagados',
   'Delete all migraine entries on this device?': 'Apagar todos os registos de enxaqueca neste dispositivo?', 'Tap a bar to see how long each migraine lasted.': 'Toque numa barra para ver quanto durou cada enxaqueca.',
   'Duration of each migraine': 'Duração de cada enxaqueca', '‹ All months': '‹ Todos os meses', 'No migraines logged this month.': 'Sem enxaquecas registadas neste mês.',
-  'ongoing': 'a decorrer', 'not recorded': 'sem registo', 'rain': 'chuva', 'Location off': 'Localização desligada'
+  'ongoing': 'a decorrer', 'not recorded': 'sem registo', 'Migraine in progress': 'Enxaqueca a decorrer', 'It ended': 'Terminou', 'Duration': 'Duração', 'Save': 'Guardar',
+  'Filled in with the time since it started. Change it if it ended earlier.': 'Preenchido com o tempo desde que começou. Altere se terminou mais cedo.',
+  'Saved. Take care of yourself.': 'Guardado. Cuide de si.', 'rain': 'chuva', 'Location off': 'Localização desligada'
 };
 const L = s => (LANG === 'pt' && PT[s]) || s;
 // Text with numbers
 const TX = {
+  since: (when, dur) => LANG === 'pt' ? `Desde ${when} · há ${dur}` : `Since ${when} · ${dur} ago`,
+  startedAt: when => LANG === 'pt' ? `Começou ${when}.` : `Started ${when}.`,
   stepOf: (n, t) => LANG === 'pt' ? `Passo ${n} de ${t}` : `Step ${n} of ${t}`,
   migraines: n => LANG === 'pt' ? `${n} enxaqueca${n === 1 ? '' : 's'}` : `${n} migraine${n === 1 ? '' : 's'}`,
   logged: n => LANG === 'pt' ? `${n} enxaqueca${n === 1 ? '' : 's'} registada${n === 1 ? '' : 's'}` : `${n} migraine${n === 1 ? '' : 's'} logged`,

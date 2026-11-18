@@ -53,7 +53,7 @@ if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListen
 // ---------- State ----------
 const blankDraft = () => ({ started: 'Now', intensity: 7, ongoing: 'Yes', durValue: 4, unit: 'hours', routine: [], food: [], feelings: [],
   medication: null, helped: [], note: '', auto: null });
-const S = { screen: 'home', draft: blankDraft(), period: '6m', sum: null, editing: false, month: null };
+const S = { screen: 'home', draft: blankDraft(), period: '6m', sum: null, editing: false, month: null, end: null };
 
 // ---------- Helpers ----------
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -153,7 +153,6 @@ function localSummary(st) {
 }
 
 // Back of the flip card: how long each migraine in one month lasted
-const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
 function monthDetail(key) {
   const [y, m] = key.split('-').map(Number);
   const title = new Date(y, m - 1, 1).toLocaleDateString(LOC, { month: 'long', year: 'numeric' });
@@ -172,6 +171,11 @@ function monthDetail(key) {
     ${rows || `<p class="muted">${L('No migraines logged this month.')}</p>`}`;
 }
 
+const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
+const elapsedH = l => Math.max(0.25, (Date.now() - new Date(l.start).getTime()) / 36e5);
+// Pick a readable value and unit for a number of hours
+const toValUnit = h => h < 1 ? [Math.max(5, Math.round(h * 60 / 5) * 5), 'min'] : h < 48 ? [Math.round(h), 'hours'] : [Math.round(h / 24), 'days'];
+
 // ---------- Screens ----------
 const screens = {
   home() {
@@ -182,6 +186,9 @@ const screens = {
     return `<div class="screen">
       <div class="brand"><span>Migraine Compass</span><button class="textlink small" style="margin:0" data-a="go" data-v="settings">${L('Settings')}</button></div>
       <h1>${L('How are you today?')}</h1>
+      ${all.filter(l => l.ongoing === 'Yes').map(l => `<div class="card ongoing"><div><p class="label" style="margin-bottom:4px">${L('Migraine in progress')}</p>
+        <p>${esc(TX.since(new Date(l.start).toLocaleString(LOC, { weekday: 'short', hour: '2-digit', minute: '2-digit' }).replace(/\./g, ''), fmtDur(elapsedH(l)).replace(' ', '\u00a0')))}</p></div>
+        <button class="btn small-btn" data-a="endStart" data-v="${l.id}">${L('It ended')}</button></div>`).join('')}
       <button class="hero" data-a="start"><b>${L('Log a migraine')}</b><span>${L('Three quick steps: when and routine, food and feelings, what helped.')}</span><i>${L('Start ›')}</i></button>
       <div class="card"><p class="label">${L('Last migraine')}</p><p>${esc(lastTxt)}</p></div>
       <div class="card"><p class="label">${L('This month')}</p><p class="big">${TX.logged(month)}</p>
@@ -288,6 +295,20 @@ const screens = {
     </div>${nav('doctor')}`;
   },
 
+  end() {
+    const e = S.end;
+    return `<div class="screen"><div class="stephead"><button class="back" data-a="go" data-v="home">${L('‹ Back')}</button></div>
+      <h1>${L('How long did it last?')}</h1>
+      <p class="sub">${esc(TX.startedAt(new Date(e.start).toLocaleString(LOC, { weekday: 'long', hour: '2-digit', minute: '2-digit' })))}</p>
+      <div class="card"><p class="label">${L('Duration')}</p>
+        <div class="durrow"><div class="stepper"><button data-a="enddur" data-v="-1" aria-label="${L('Less')}">−</button>
+          <input id="endValue" type="number" inputmode="numeric" min="1" max="999" value="${e.value}">
+          <button data-a="enddur" data-v="1" aria-label="${L('More')}">+</button></div>
+          ${chips('endunit', UNITS, e.unit)}</div>
+        <p class="note">${L('Filled in with the time since it started. Change it if it ended earlier.')}</p></div>
+      <div class="footer"><button class="btn" data-a="endSave">${L('Save')}</button></div></div>`;
+  },
+
   settings() {
     const s = settings();
     return `<div class="screen"><div class="stephead"><button class="back" data-a="go" data-v="home">${L('‹ Back')}</button></div>
@@ -392,6 +413,17 @@ document.addEventListener('click', e => {
     document.getElementById('monthFlip').classList.add('flipped'); return;
   }
   if (a === 'monthBack') { S.month = null; document.getElementById('monthFlip').classList.remove('flipped'); return; }
+  if (a === 'endStart') {
+    const l = logs().find(x => x.id === v); if (!l) return;
+    const [value, unit] = toValUnit(elapsedH(l)); S.end = { id: l.id, start: l.start, value, unit }; return go('end');
+  }
+  if (a === 'enddur') { S.end.value = Math.max(1, Math.min(999, (+S.end.value || 1) + +v)); return render(); }
+  if (a === 'chip' && el.dataset.g === 'endunit') { S.end.unit = v; return render(); }
+  if (a === 'endSave') {
+    const all = read('mc.logs', []), l = all.find(x => x.id === S.end.id);
+    if (l) { l.ongoing = 'No'; l.durationH = Math.round(toHours(+S.end.value || 1, S.end.unit) * 100) / 100; saveLogs(all); }
+    S.end = null; toast(L('Saved. Take care of yourself.')); return go('home');
+  }
   if (a === 'chip') {
     const g = el.dataset.g;
     if (SINGLE.includes(g)) D[g] = (g === 'medication' && D[g] === v) ? null : v;
@@ -454,6 +486,7 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('input', e => {
   if (e.target.id === 'note') S.draft.note = e.target.value;
+  if (e.target.id === 'endValue' && S.end) S.end.value = Math.max(1, Math.min(999, parseInt(e.target.value, 10) || 1));
   if (e.target.id === 'durValue') S.draft.durValue = Math.max(1, Math.min(999, parseInt(e.target.value, 10) || 1));
   const k = e.target.dataset && e.target.dataset.k;
   if (k && S.sum) S.sum[k] = e.target.innerText;
