@@ -17,6 +17,7 @@ const EXTRA = {
 };
 const SECTION = { food: 'Food and drink', feelings: 'How are you feeling?' };
 const UNITS = ['min', 'hours', 'days'];
+const FEEDBACK_FORM = 'https://docs.google.com/forms/d/e/1FAIpQLSfG9RKKRzTS_LGPfTIUviv5vzTiU6vG5_XAGU24vawXJuzG4g/viewform';
 const SINGLE = ['started', 'ongoing', 'medication', 'unit'];
 const EXCLUSIVE = { 'No change': 'routine', 'Nothing unusual': 'food' };
 
@@ -353,11 +354,15 @@ const screens = {
         <div class="addrow"><input id="customText" type="text" maxlength="30" placeholder="${L('e.g. Blurred vision')}">
           <select id="customGroup"><option value="feelings">${L('Feelings')}</option><option value="food">${L('Food and drink')}</option></select>
           <button class="btn small-btn" data-a="addCustom">${L('Add')}</button></div></div>
+      <div class="card"><p class="label">${L('Feedback')}</p>
+        <p class="muted small" style="margin-bottom:10px">${L('Have a suggestion or found a problem? Tell the team in a short, anonymous form.')}</p>
+        <a class="btn" style="display:block;text-align:center;text-decoration:none" href="${FEEDBACK_FORM}" target="_blank" rel="noopener">${L('Send a suggestion')}</a>
+        <p class="note">${L('Suggestions go to a Google form. Please do not write your name or personal health details.')}</p></div>
       <div class="card"><p class="label">${L('Test data')}</p>
         <p class="muted small" style="margin-bottom:12px">${L('Fictional entries so you can explore History and the doctor summary.')}</p>
         <div class="row"><button class="btn" data-a="demo">${L('Load sample data')}</button>
         <button class="btn outline" data-a="clear">${L('Delete all')}</button></div></div>
-      <p class="muted small">${L('Everything is stored only on this device.')}</p></div>`;
+      <p class="muted small">${L('Your entries are stored only on this device.')}</p></div>`;
   }
 };
 

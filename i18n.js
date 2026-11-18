@@ -55,7 +55,7 @@ const PT = {
   'Tap an option to turn it on or off. Options you added yourself can be deleted with ×.': 'Toque numa opção para a ligar ou desligar. As opções que criou podem ser apagadas com ×.',
   'Add your own': 'Acrescentar as suas', 'e.g. Blurred vision': 'ex.: Visão turva', 'Add': 'Adicionar', 'Test data': 'Dados de teste',
   'Fictional entries so you can explore History and the doctor summary.': 'Registos fictícios para explorar o histórico e o resumo para o médico.',
-  'Load sample data': 'Carregar dados de exemplo', 'Delete all': 'Apagar tudo', 'Everything is stored only on this device.': 'Tudo fica guardado apenas neste dispositivo.',
+  'Load sample data': 'Carregar dados de exemplo', 'Delete all': 'Apagar tudo', 'Your entries are stored only on this device.': 'Os seus registos ficam guardados apenas neste dispositivo.',
   // messages
   'AI is unavailable right now. Kept the automatic text.': 'A IA não está disponível agora. Mantive o texto automático.', 'Type an option first': 'Escreva primeiro uma opção',
   'That option already exists': 'Essa opção já existe', 'Sample data loaded': 'Dados de exemplo carregados', 'All entries deleted': 'Todos os registos foram apagados',
@@ -64,7 +64,8 @@ const PT = {
   'ongoing': 'a decorrer', 'not recorded': 'sem registo', 'Migraine in progress': 'Enxaqueca a decorrer', 'It ended': 'Terminou', 'Duration': 'Duração', 'Save': 'Guardar',
   'Filled in with the time since it started. Change it if it ended earlier.': 'Preenchido com o tempo desde que começou. Altere se terminou mais cedo.',
   'Saved. Take care of yourself.': 'Guardado. Cuide de si.', 'See durations ›': 'Ver durações ›', 'Tap a migraine to see what you logged.': 'Toque numa enxaqueca para ver o que registou.',
-  'Routine': 'Rotina', 'Nothing else logged.': 'Nada mais registado.', 'Your entries are not saved in the cloud.': 'Os seus registos não são guardados na nuvem.', 'rain': 'chuva', 'Location off': 'Localização desligada'
+  'Routine': 'Rotina', 'Nothing else logged.': 'Nada mais registado.', 'Your entries are not saved in the cloud.': 'Os seus registos não são guardados na nuvem.', 'Feedback': 'Sugestões', 'Have a suggestion or found a problem? Tell the team in a short, anonymous form.': 'Tem uma sugestão ou encontrou um problema? Diga-nos num formulário curto e anónimo.',
+  'Send a suggestion': 'Enviar sugestão', 'Suggestions go to a Google form. Please do not write your name or personal health details.': 'As sugestões vão para um formulário Google. Não escreva o seu nome nem dados de saúde pessoais.', 'rain': 'chuva', 'Location off': 'Localização desligada'
 };
 const L = s => (LANG === 'pt' && PT[s]) || s;
 // Text with numbers
