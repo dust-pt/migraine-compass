@@ -25,7 +25,12 @@ const read = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSO
 const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage blocked */ } };
 const logs = () => read('mc.logs', []).sort((a, b) => b.start.localeCompare(a.start));
 const saveLogs = v => write('mc.logs', v);
-const settings = () => Object.assign({ menstruation: true, theme: 'auto', extras: { food: [], feelings: [] } }, read('mc.settings', {}));
+const settings = () => {
+  const s = Object.assign({ menstruation: true, theme: 'auto', extras: { food: [], feelings: [] }, custom: { food: [], feelings: [] } }, read('mc.settings', {}));
+  // older versions kept the person's own options inside "extras": move them to "custom"
+  for (const g of ['food', 'feelings']) for (const o of s.extras[g] || []) if (!EXTRA[g].includes(o) && !s.custom[g].includes(o)) s.custom[g].push(o);
+  return s;
+};
 const saveSettings = patch => write('mc.settings', Object.assign(settings(), patch));
 // Options shown in a section: base list plus extras switched on in Settings ("Nothing unusual" stays last)
 function optionsFor(g) {
@@ -271,8 +276,10 @@ const screens = {
       <div class="card"><p class="label">Extra options</p>
         <p class="muted small" style="margin-bottom:10px">Turn on options that are not in the app by default. They appear in the “Food, drink and feelings” step.</p>
         ${['food', 'feelings'].map(g => `<p class="small" style="font-weight:600;margin:10px 0 8px">${SECTION[g]}</p>
-          <div class="chips">${[...EXTRA[g], ...s.extras[g].filter(o => !EXTRA[g].includes(o))].map(o =>
-            `<button class="chip" data-a="extra" data-g="${g}" data-v="${esc(o)}" aria-pressed="${s.extras[g].includes(o)}">${esc(o)}</button>`).join('')}</div>`).join('')}
+          <div class="chips">${EXTRA[g].map(o =>
+            `<button class="chip" data-a="extra" data-g="${g}" data-v="${esc(o)}" aria-pressed="${s.extras[g].includes(o)}">${esc(o)}</button>`).join('')}
+          ${s.custom[g].map(o => `<span class="chipwrap"><button class="chip" data-a="extra" data-g="${g}" data-v="${esc(o)}" aria-pressed="${s.extras[g].includes(o)}">${esc(o)}</button><button class="del" data-a="removeCustom" data-g="${g}" data-v="${esc(o)}" aria-label="Delete ${esc(o)}">×</button></span>`).join('')}</div>`).join('')}
+        <p class="note">Tap an option to turn it on or off. Options you added yourself can be deleted with ×.</p>
         <p class="small" style="font-weight:600;margin:14px 0 8px">Add your own</p>
         <div class="addrow"><input id="customText" type="text" maxlength="30" placeholder="e.g. Blurred vision">
           <select id="customGroup"><option value="feelings">Feelings</option><option value="food">Food and drink</option></select>
@@ -387,8 +394,15 @@ document.addEventListener('click', e => {
     const g = document.getElementById('customGroup').value;
     if (!t) return toast('Type an option first');
     const ex = settings().extras; ex[g] = ex[g] || [];
-    if (!ex[g].includes(t) && !OPT[g].includes(t)) ex[g].push(t);
-    saveSettings({ extras: ex }); toast(`Added to ${SECTION[g]}`); return render();
+    const cu = settings().custom; cu[g] = cu[g] || [];
+    if (OPT[g].includes(t) || EXTRA[g].includes(t) || cu[g].includes(t)) return toast('That option already exists');
+    cu[g].push(t); ex[g].push(t);
+    saveSettings({ extras: ex, custom: cu }); toast(`Added to ${SECTION[g]}`); return render();
+  }
+  if (a === 'removeCustom') {
+    const g = el.dataset.g, st = settings();
+    st.custom[g] = st.custom[g].filter(o => o !== v); st.extras[g] = st.extras[g].filter(o => o !== v);
+    saveSettings({ custom: st.custom, extras: st.extras }); toast(`Deleted “${v}”`); return render();
   }
   if (a === 'dur') { D.durValue = Math.max(1, Math.min(999, (+D.durValue || 1) + +v)); return render(); }
   if (a === 'theme') { write('mc.settings', Object.assign(settings(), { theme: v })); applyTheme(); return render(); }
