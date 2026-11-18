@@ -138,5 +138,7 @@ nav.tabs button[aria-current="page"]:before{content:"";position:absolute;top:0;l
 .addrow input{flex:1;min-width:150px}
 .small-btn{width:auto;padding:10px 18px}
 
-.chipwrap{display:inline-flex;align-items:center;gap:2px}
-.del{border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:50%;width:30px;height:30px;font:inherit;font-size:16px;line-height:1;cursor:pointer}
+.chipwrap{position:relative;display:inline-flex}
+.del{position:absolute;top:-7px;right:-7px;border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:50%;
+  width:22px;height:22px;padding:0;font:inherit;font-size:13px;line-height:1;cursor:pointer;display:grid;place-items:center}
+.del:before{content:"";position:absolute;inset:-8px}

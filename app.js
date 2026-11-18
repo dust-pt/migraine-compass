@@ -34,7 +34,8 @@ const settings = () => {
 const saveSettings = patch => write('mc.settings', Object.assign(settings(), patch));
 // Options shown in a section: base list plus extras switched on in Settings ("Nothing unusual" stays last)
 function optionsFor(g) {
-  const base = OPT[g], extra = settings().extras[g] || [];
+  const st = settings(), base = OPT[g], on = st.extras[g] || [];
+  const extra = [...EXTRA[g], ...st.custom[g]].filter(x => on.includes(x)); // same order as in Settings
   const tail = base.filter(o => o === 'Nothing unusual');
   return [...base.filter(o => o !== 'Nothing unusual'), ...extra.filter(o => !base.includes(o)), ...tail];
 }
