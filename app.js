@@ -208,7 +208,7 @@ const screens = {
       ${all.filter(l => l.ongoing === 'Yes').map(l => `<div class="card ongoing"><div><p class="label" style="margin-bottom:4px">${L('Migraine in progress')}</p>
         <p>${esc(TX.since(new Date(l.start).toLocaleString(LOC, { weekday: 'short', hour: '2-digit', minute: '2-digit' }).replace(/\./g, ''), fmtDur(elapsedH(l)).replace(' ', '\u00a0')))}</p></div>
         <button class="btn small-btn" data-a="endStart" data-v="${l.id}">${L('It ended')}</button></div>`).join('')}
-      <button class="hero" data-a="start"><b>${L('Log a migraine')}</b><span>${L('Three quick steps: when and routine, food and feelings, what helped.')}</span><small class="privacy">${L('Nothing is saved in the cloud: everything stays on this phone.')}</small><i>${L('Start ›')}</i></button>
+      <button class="hero" data-a="start"><b>${L('Log a migraine')}</b><span>${L('Three quick steps: when and routine, food and feelings, what helped.')}</span><small class="privacy">${L('Your entries are not saved in the cloud.')}</small><i>${L('Start ›')}</i></button>
       ${last ? `<div class="card lastcard${S.lastOpen ? ' open' : ''}"><button class="lasthead" data-a="lastToggle" aria-expanded="${!!S.lastOpen}">
           <span><span class="label" style="display:block">${L('Last migraine')}</span><span>${esc(lastTxt)}</span></span><span class="chev">›</span></button>
           ${S.lastOpen ? migDetail(last) : ''}</div>`

@@ -64,7 +64,7 @@ const PT = {
   'ongoing': 'a decorrer', 'not recorded': 'sem registo', 'Migraine in progress': 'Enxaqueca a decorrer', 'It ended': 'Terminou', 'Duration': 'Duração', 'Save': 'Guardar',
   'Filled in with the time since it started. Change it if it ended earlier.': 'Preenchido com o tempo desde que começou. Altere se terminou mais cedo.',
   'Saved. Take care of yourself.': 'Guardado. Cuide de si.', 'See durations ›': 'Ver durações ›', 'Tap a migraine to see what you logged.': 'Toque numa enxaqueca para ver o que registou.',
-  'Routine': 'Rotina', 'Nothing else logged.': 'Nada mais registado.', 'Nothing is saved in the cloud: everything stays on this phone.': 'Nada é guardado na nuvem: fica tudo neste telemóvel.', 'rain': 'chuva', 'Location off': 'Localização desligada'
+  'Routine': 'Rotina', 'Nothing else logged.': 'Nada mais registado.', 'Your entries are not saved in the cloud.': 'Os seus registos não são guardados na nuvem.', 'rain': 'chuva', 'Location off': 'Localização desligada'
 };
 const L = s => (LANG === 'pt' && PT[s]) || s;
 // Text with numbers
