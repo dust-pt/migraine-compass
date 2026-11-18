@@ -142,3 +142,20 @@ nav.tabs button[aria-current="page"]:before{content:"";position:absolute;top:0;l
 .del{position:absolute;top:-7px;right:-7px;border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:50%;
   width:22px;height:22px;padding:0;font:inherit;font-size:13px;line-height:1;cursor:pointer;display:grid;place-items:center}
 .del:before{content:"";position:absolute;inset:-8px}
+
+/* month chart flip (rotation around the vertical axis) */
+.flip{perspective:1000px}
+.flip-inner{display:grid;transition:transform .6s cubic-bezier(.3,.7,.3,1);transform-style:preserve-3d}
+.flip.flipped .flip-inner{transform:rotateY(180deg)}
+.face{grid-area:1/1;backface-visibility:hidden;-webkit-backface-visibility:hidden}
+.face-back{transform:rotateY(180deg)}
+.flip:not(.flipped) .face-back,.flip.flipped .face-front{pointer-events:none}
+button.col{border:0;background:none;padding:0;font:inherit;cursor:pointer}
+.dhead{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.dhead button{white-space:nowrap}
+.drow{display:grid;grid-template-columns:96px 1fr auto;align-items:center;gap:10px;padding:6px 0}
+.dday{font-size:13.5px;color:var(--muted)}
+.dbar{height:10px;border-radius:5px;background:var(--track);overflow:hidden}
+.dbar i{display:block;height:100%;background:var(--primary);border-radius:5px}
+.drow b{font-size:14px;font-weight:600;min-width:52px;text-align:right}
+@media (prefers-reduced-motion:reduce){.flip-inner{transition:none}}

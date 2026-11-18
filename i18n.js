@@ -59,7 +59,9 @@ const PT = {
   // messages
   'AI is unavailable right now. Kept the automatic text.': 'A IA não está disponível agora. Mantive o texto automático.', 'Type an option first': 'Escreva primeiro uma opção',
   'That option already exists': 'Essa opção já existe', 'Sample data loaded': 'Dados de exemplo carregados', 'All entries deleted': 'Todos os registos foram apagados',
-  'Delete all migraine entries on this device?': 'Apagar todos os registos de enxaqueca neste dispositivo?', 'rain': 'chuva', 'Location off': 'Localização desligada'
+  'Delete all migraine entries on this device?': 'Apagar todos os registos de enxaqueca neste dispositivo?', 'Tap a bar to see how long each migraine lasted.': 'Toque numa barra para ver quanto durou cada enxaqueca.',
+  'Duration of each migraine': 'Duração de cada enxaqueca', '‹ All months': '‹ Todos os meses', 'No migraines logged this month.': 'Sem enxaquecas registadas neste mês.',
+  'ongoing': 'a decorrer', 'not recorded': 'sem registo', 'rain': 'chuva', 'Location off': 'Localização desligada'
 };
 const L = s => (LANG === 'pt' && PT[s]) || s;
 // Text with numbers

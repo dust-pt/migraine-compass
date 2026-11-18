@@ -53,7 +53,7 @@ if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListen
 // ---------- State ----------
 const blankDraft = () => ({ started: 'Now', intensity: 7, ongoing: 'Yes', durValue: 4, unit: 'hours', routine: [], food: [], feelings: [],
   medication: null, helped: [], note: '', auto: null });
-const S = { screen: 'home', draft: blankDraft(), period: '6m', sum: null, editing: false };
+const S = { screen: 'home', draft: blankDraft(), period: '6m', sum: null, editing: false, month: null };
 
 // ---------- Helpers ----------
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -152,6 +152,26 @@ function localSummary(st) {
   };
 }
 
+// Back of the flip card: how long each migraine in one month lasted
+const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
+function monthDetail(key) {
+  const [y, m] = key.split('-').map(Number);
+  const title = new Date(y, m - 1, 1).toLocaleDateString(LOC, { month: 'long', year: 'numeric' });
+  const list = logs().filter(l => l.start.startsWith(key)).reverse();
+  const maxH = Math.max(1, ...list.map(l => l.durationH || 0));
+  const rows = list.map(l => {
+    const day = cap(new Date(l.start).toLocaleDateString(LOC, { weekday: 'short', day: 'numeric' }).replace(/\./g, ''));
+    const h = l.durationH;
+    return `<div class="drow"><span class="dday">${esc(day)}</span>
+      <div class="dbar">${h ? `<i style="width:${Math.max(4, Math.round(h / maxH * 100))}%"></i>` : ''}</div>
+      <b>${h ? esc(fmtDur(h)) : `<span class="muted small">${L(l.ongoing === 'Yes' ? 'ongoing' : 'not recorded')}</span>`}</b></div>`;
+  }).join('');
+  return `<div class="dhead"><p class="label" style="margin:0">${L('Duration of each migraine')}</p>
+      <button class="textlink small" style="margin:0" data-a="monthBack">${L('‹ All months')}</button></div>
+    <p class="big" style="margin:4px 0 10px">${esc(cap(title))}</p>
+    ${rows || `<p class="muted">${L('No migraines logged this month.')}</p>`}`;
+}
+
 // ---------- Screens ----------
 const screens = {
   home() {
@@ -223,7 +243,7 @@ const screens = {
     const all = logs(), now = new Date(), list = inPeriod(all, S.period);
     const months = [...Array(6)].map((_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
-      return { label: fmtMonth(d), n: all.filter(l => l.start.startsWith(monthKey(d))).length };
+      return { key: monthKey(d), label: fmtMonth(d), n: all.filter(l => l.start.startsWith(monthKey(d))).length };
     });
     const max = Math.max(1, ...months.map(m => m.n));
     const top = topFactors(list).slice(0, 4), topMax = top.length ? top[0][1] : 1;
@@ -234,8 +254,12 @@ const screens = {
       <div class="row">
         <div class="card stat grow"><b>${list.length}</b><span>${TX.migraines(list.length).replace(/^\d+ /, '')} ${per}</span></div>
         <div class="card stat grow"><b>${inPeriod(all, '30d').length}</b><span>${L('in the last 30 days')}</span></div></div>
-      <div class="card"><p class="label">${L('Migraines per month')}</p><div class="bars">${months.map(m =>
-        `<div class="col ${m.n ? '' : 'zero'}"><i style="height:${Math.round(m.n / max * 70)}%"></i><span>${m.label}</span></div>`).join('')}</div></div>
+      <div class="flip${S.month ? ' flipped' : ''}" id="monthFlip"><div class="flip-inner">
+        <div class="card face face-front"><p class="label">${L('Migraines per month')}</p><div class="bars">${months.map(m =>
+          `<button class="col ${m.n ? '' : 'zero'}" data-a="month" data-v="${m.key}" aria-label="${esc(m.label)}: ${m.n}"><i style="height:${Math.round(m.n / max * 70)}%"></i><span>${m.label}</span></button>`).join('')}</div>
+          <p class="note">${L('Tap a bar to see how long each migraine lasted.')}</p></div>
+        <div class="card face face-back" id="monthBack">${S.month ? monthDetail(S.month) : ''}</div>
+      </div></div>
       <div class="card"><p class="label">${L('Most logged alongside a migraine')}</p>
         ${top.length ? top.map(([k, n]) => `<div class="factor"><div><span>${esc(L(k))}</span><b>${n}×</b></div>
           <div class="meter"><i style="width:${Math.round(n / topMax * 90)}%"></i></div></div>`).join('') : `<p class="muted">${L('Log a few migraines to see what comes up most.')}</p>`}
@@ -351,6 +375,7 @@ const syncNote = () => { const n = document.getElementById('note'); if (n) S.dra
 function go(screen) {
   if (S.screen === 'log4') syncNote();
   if (screen === 'doctor' && S.screen !== 'doctor') { S.sum = null; S.editing = false; }
+  if (screen !== 'history') S.month = null;
   S.screen = screen; render(); window.scrollTo(0, 0);
   if (screen === 'log1') loadAuto();
 }
@@ -362,6 +387,11 @@ document.addEventListener('click', e => {
   if (a === 'start') { S.draft = blankDraft(); return go('log1'); }
   if (a === 'intensity') { D.intensity = +v; return render(); }
   if (a === 'period') { S.period = v; return render(); }
+  if (a === 'month') { // flip the chart card to show durations, without re-rendering so the rotation animates
+    S.month = v; document.getElementById('monthBack').innerHTML = monthDetail(v);
+    document.getElementById('monthFlip').classList.add('flipped'); return;
+  }
+  if (a === 'monthBack') { S.month = null; document.getElementById('monthFlip').classList.remove('flipped'); return; }
   if (a === 'chip') {
     const g = el.dataset.g;
     if (SINGLE.includes(g)) D[g] = (g === 'medication' && D[g] === v) ? null : v;
