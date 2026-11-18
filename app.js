@@ -11,7 +11,13 @@ const OPT = {
   medication: ['Took medication', 'No medication'],
   helped: ['Dark room', 'Rest', 'Sleep']
 };
-const SINGLE = ['started', 'ongoing', 'medication'];
+const EXTRA = {
+  food: ['Red wine', 'Citrus fruit', 'Cured meats', 'Artificial sweeteners', 'Energy drink', 'Fasting'],
+  feelings: ['Nauseous', 'Dizzy', 'Sensitive to light', 'Sensitive to noise', 'Aura', 'Neck pain', 'Overwhelmed']
+};
+const SECTION = { food: 'Food and drink', feelings: 'How are you feeling?' };
+const UNITS = ['min', 'hours', 'days'];
+const SINGLE = ['started', 'ongoing', 'medication', 'unit'];
 const EXCLUSIVE = { 'No change': 'routine', 'Nothing unusual': 'food' };
 
 // ---------- Storage ----------
@@ -19,7 +25,16 @@ const read = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSO
 const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage blocked */ } };
 const logs = () => read('mc.logs', []).sort((a, b) => b.start.localeCompare(a.start));
 const saveLogs = v => write('mc.logs', v);
-const settings = () => Object.assign({ menstruation: true, theme: 'auto' }, read('mc.settings', {}));
+const settings = () => Object.assign({ menstruation: true, theme: 'auto', extras: { food: [], feelings: [] } }, read('mc.settings', {}));
+const saveSettings = patch => write('mc.settings', Object.assign(settings(), patch));
+// Options shown in a section: base list plus extras switched on in Settings ("Nothing unusual" stays last)
+function optionsFor(g) {
+  const base = OPT[g], extra = settings().extras[g] || [];
+  const tail = base.filter(o => o === 'Nothing unusual');
+  return [...base.filter(o => o !== 'Nothing unusual'), ...extra.filter(o => !base.includes(o)), ...tail];
+}
+const toHours = (v, u) => u === 'min' ? v / 60 : u === 'days' ? v * 24 : v;
+const fmtDur = h => h < 1 ? `${Math.round(h * 60)} min` : h >= 24 ? `${Math.round(h / 24 * 10) / 10} day${h >= 48 ? 's' : ''}` : `${Math.round(h * 10) / 10} h`;
 function applyTheme() {
   const t = settings().theme;
   const dark = t === 'dark' || (t === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
@@ -30,7 +45,7 @@ applyTheme();
 if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
 
 // ---------- State ----------
-const blankDraft = () => ({ started: 'Now', intensity: 7, ongoing: 'Yes', routine: [], food: [], feelings: [],
+const blankDraft = () => ({ started: 'Now', intensity: 7, ongoing: 'Yes', durValue: 4, unit: 'hours', routine: [], food: [], feelings: [],
   medication: null, helped: [], note: '', auto: null });
 const S = { screen: 'home', draft: blankDraft(), period: '6m', sum: null, editing: false };
 
@@ -137,9 +152,9 @@ const screens = {
     const all = logs(), last = all[0];
     const month = all.filter(l => l.start.startsWith(monthKey(new Date()))).length;
     const lastTxt = last ? [new Date(last.start).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }),
-      `intensity ${last.intensity}/10`, last.durationH ? `about ${last.durationH} h` : null].filter(Boolean).join(' · ') : 'Nothing logged yet';
+      `intensity ${last.intensity}/10`, last.durationH ? `about ${fmtDur(last.durationH)}` : null].filter(Boolean).join(' · ') : 'Nothing logged yet';
     return `<div class="screen">
-      <div class="brand"><span>Migraine Compass</span><span><button class="gear" data-a="night" aria-label="Night mode">${document.documentElement.dataset.theme === 'dark' ? '☀' : '☾'}</button><button class="gear" data-a="go" data-v="settings" aria-label="Settings">⚙</button></span></div>
+      <div class="brand"><span>Migraine Compass</span><button class="textlink small" style="margin:0" data-a="go" data-v="settings">Settings</button></div>
       <h1>How are you today?</h1>
       <button class="hero" data-a="start"><b>Log a migraine</b><span>Three quick steps: when and routine, food and feelings, what helped.</span><i>Start ›</i></button>
       <div class="card"><p class="label">Last migraine</p><p>${esc(lastTxt)}</p></div>
@@ -164,7 +179,12 @@ const screens = {
       <div class="card"><p class="label">Intensity (1 = mild, 10 = severe)</p>
         <div class="circles">${[1,2,3,4,5,6,7,8,9,10].map(n =>
           `<button class="chip" data-a="intensity" data-v="${n}" aria-pressed="${d.intensity === n}">${n}</button>`).join('')}</div></div>
-      <div class="card"><p class="label">Still ongoing?</p>${chips('ongoing', OPT.ongoing, d.ongoing)}</div>
+      <div class="card"><p class="label">Still ongoing?</p>${chips('ongoing', OPT.ongoing, d.ongoing)}
+        ${d.ongoing === 'No' ? `<div class="duration"><p class="label" style="margin-top:14px">How long did it last?</p>
+          <div class="durrow"><div class="stepper"><button data-a="dur" data-v="-1" aria-label="Less">−</button>
+            <input id="durValue" type="number" inputmode="numeric" min="1" max="999" value="${d.durValue}">
+            <button data-a="dur" data-v="1" aria-label="More">+</button></div>
+            ${chips('unit', UNITS, d.unit)}</div></div>` : ''}</div>
       <div class="card"><p class="label">Any change in routine?</p>${chips('routine', list, d.routine)}
         <p class="note">Menstruation is optional and only appears if you turn it on in Settings.</p></div>`, 'log3', 'home');
   },
@@ -172,8 +192,8 @@ const screens = {
   log3() {
     const d = S.draft;
     return step(2, 'Food, drink and feelings', 'Select what applies. Everything is optional.', `
-      <div class="card"><p class="label">Food and drink</p>${chips('food', OPT.food, d.food)}</div>
-      <div class="card"><p class="label">How are you feeling?</p>${chips('feelings', OPT.feelings, d.feelings)}</div>`, 'log4', 'log1');
+      <div class="card"><p class="label">Food and drink</p>${chips('food', optionsFor('food'), d.food)}</div>
+      <div class="card"><p class="label">How are you feeling?</p>${chips('feelings', optionsFor('feelings'), d.feelings)}</div>`, 'log4', 'log1');
   },
 
   log4() {
@@ -247,6 +267,15 @@ const screens = {
           `<button class="chip" data-a="theme" data-v="${k}" aria-pressed="${s.theme === k}">${l}</button>`).join('')}</div></div>
       <div class="card"><label class="switch"><span>Show “Menstruation” option</span>
         <input type="checkbox" id="menstruation" ${s.menstruation ? 'checked' : ''}></label></div>
+      <div class="card"><p class="label">Extra options</p>
+        <p class="muted small" style="margin-bottom:10px">Turn on options that are not in the app by default. They appear in the “Food, drink and feelings” step.</p>
+        ${['food', 'feelings'].map(g => `<p class="small" style="font-weight:600;margin:10px 0 8px">${SECTION[g]}</p>
+          <div class="chips">${[...EXTRA[g], ...s.extras[g].filter(o => !EXTRA[g].includes(o))].map(o =>
+            `<button class="chip" data-a="extra" data-g="${g}" data-v="${esc(o)}" aria-pressed="${s.extras[g].includes(o)}">${esc(o)}</button>`).join('')}</div>`).join('')}
+        <p class="small" style="font-weight:600;margin:14px 0 8px">Add your own</p>
+        <div class="addrow"><input id="customText" type="text" maxlength="30" placeholder="e.g. Blurred vision">
+          <select id="customGroup"><option value="feelings">Feelings</option><option value="food">Food and drink</option></select>
+          <button class="btn small-btn" data-a="addCustom">Add</button></div></div>
       <div class="card"><p class="label">Test data</p>
         <p class="muted small" style="margin-bottom:12px">Fictional entries so you can explore History and the doctor summary.</p>
         <div class="row"><button class="btn" data-a="demo">Load sample data</button>
@@ -339,10 +368,26 @@ document.addEventListener('click', e => {
     syncNote();
     const { started, ...rest } = D;
     const all = read('mc.logs', []);
-    all.push(Object.assign({ id: 'l' + Date.now(), start: startFrom(started) }, rest));
+    const { durValue, unit, ...entry } = rest;
+    if (entry.ongoing === 'No') entry.durationH = Math.round(toHours(+durValue || 1, unit) * 100) / 100;
+    all.push(Object.assign({ id: 'l' + Date.now(), start: startFrom(started) }, entry));
     saveLogs(all); S.draft = blankDraft(); return go('saved');
   }
   if (a === 'night') { write('mc.settings', Object.assign(settings(), { theme: document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark' })); applyTheme(); return render(); }
+  if (a === 'extra') {
+    const g = el.dataset.g, ex = settings().extras, arr = ex[g] || (ex[g] = []), i = arr.indexOf(v);
+    if (i >= 0) arr.splice(i, 1); else arr.push(v);
+    saveSettings({ extras: ex }); return render();
+  }
+  if (a === 'addCustom') {
+    const t = document.getElementById('customText').value.trim().replace(/\s+/g, ' ');
+    const g = document.getElementById('customGroup').value;
+    if (!t) return toast('Type an option first');
+    const ex = settings().extras; ex[g] = ex[g] || [];
+    if (!ex[g].includes(t) && !OPT[g].includes(t)) ex[g].push(t);
+    saveSettings({ extras: ex }); toast(`Added to ${SECTION[g]}`); return render();
+  }
+  if (a === 'dur') { D.durValue = Math.max(1, Math.min(999, (+D.durValue || 1) + +v)); return render(); }
   if (a === 'theme') { write('mc.settings', Object.assign(settings(), { theme: v })); applyTheme(); return render(); }
   if (a === 'edit') { S.editing = !S.editing; return render(); }
   if (a === 'email') {
@@ -359,6 +404,7 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('input', e => {
   if (e.target.id === 'note') S.draft.note = e.target.value;
+  if (e.target.id === 'durValue') S.draft.durValue = Math.max(1, Math.min(999, parseInt(e.target.value, 10) || 1));
   const k = e.target.dataset && e.target.dataset.k;
   if (k && S.sum) S.sum[k] = e.target.innerText;
 });
