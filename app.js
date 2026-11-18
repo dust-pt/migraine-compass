@@ -74,7 +74,7 @@ async function loadAuto() {
   d.auto = sampleAuto(); render();
   const w = await fetchWeather();
   d.auto.weather = w || 'Location off';
-  if (S.screen === 'log2') render();
+  if (S.screen === 'log1') render();
 }
 
 // ---------- Analysis ----------
@@ -133,7 +133,7 @@ const screens = {
     return `<div class="screen">
       <div class="brand"><span>Migraine Compass</span><button class="gear" data-a="go" data-v="settings" aria-label="Settings">⚙</button></div>
       <h1>How are you today?</h1>
-      <button class="hero" data-a="start"><b>Log a migraine</b><span>Four quick steps: when, routine, food and emotions.</span><i>Start ›</i></button>
+      <button class="hero" data-a="start"><b>Log a migraine</b><span>Three quick steps: when and routine, food and feelings, what helped.</span><i>Start ›</i></button>
       <div class="card"><p class="label">Last migraine</p><p>${esc(lastTxt)}</p></div>
       <div class="card"><p class="label">This month</p><p class="big">${month} migraine${month === 1 ? '' : 's'} logged</p>
         <button class="textlink" data-a="go" data-v="history">See History ›</button></div>
@@ -144,38 +144,33 @@ const screens = {
   },
 
   log1() {
-    const d = S.draft;
-    return step(1, 'When did it start?', 'And how strong is it right now?', `
+    const d = S.draft, a = d.auto;
+    const list = OPT.routine.filter(o => settings().menstruation || o !== 'Menstruation');
+    return step(1, 'When did it start?', 'How strong it is, and what changed in the last 24 hours.', `
       <div class="card"><p class="label">Started</p>${chips('started', OPT.started, d.started)}</div>
       <div class="card"><p class="label">Intensity (1 = mild, 10 = severe)</p>
         <div class="circles">${[1,2,3,4,5,6,7,8,9,10].map(n =>
           `<button class="chip" data-a="intensity" data-v="${n}" aria-pressed="${d.intensity === n}">${n}</button>`).join('')}</div></div>
-      <div class="card"><p class="label">Still ongoing?</p>${chips('ongoing', OPT.ongoing, d.ongoing)}</div>`, 'log2', 'home');
-  },
-
-  log2() {
-    const d = S.draft, a = d.auto;
-    const list = OPT.routine.filter(o => settings().menstruation || o !== 'Menstruation');
-    return step(2, 'Any change in routine?', 'Select everything that applies in the last 24 hours.', `
+      <div class="card"><p class="label">Still ongoing?</p>${chips('ongoing', OPT.ongoing, d.ongoing)}</div>
       <div class="autobox"><p class="label">Filled in automatically</p>
         <div class="autorow"><div>Sleep last night<small>From your smartwatch</small></div><b>${a ? hm(a.sleepMin) : '…'}</b></div>
         <div class="autorow"><div>Weather today<small>From the internet, using your location</small></div><b>${a && a.weather ? esc(a.weather) : '…'}</b></div>
         <div class="autorow"><div>Screen time yesterday<small>From your phone</small></div><b>${a ? hm(a.screenMin) : '…'}</b></div>
         <p class="note">Read only with your permission. Sleep and screen time are sample data.</p></div>
-      ${chips('routine', list, d.routine)}
-      <p class="note">Menstruation is optional and only appears if you turn it on in Settings.</p>`, 'log3', 'log1');
+      <div class="card"><p class="label">Any change in routine?</p>${chips('routine', list, d.routine)}
+        <p class="note">Menstruation is optional and only appears if you turn it on in Settings.</p></div>`, 'log3', 'home');
   },
 
   log3() {
     const d = S.draft;
-    return step(3, 'Food, drink and feelings', 'Select what applies. Everything is optional.', `
+    return step(2, 'Food, drink and feelings', 'Select what applies. Everything is optional.', `
       <div class="card"><p class="label">Food and drink</p>${chips('food', OPT.food, d.food)}</div>
-      <div class="card"><p class="label">How are you feeling?</p>${chips('feelings', OPT.feelings, d.feelings)}</div>`, 'log4', 'log2');
+      <div class="card"><p class="label">How are you feeling?</p>${chips('feelings', OPT.feelings, d.feelings)}</div>`, 'log4', 'log1');
   },
 
   log4() {
     const d = S.draft;
-    return step(4, 'What happened after?', 'Medication and what helped. Everything here is optional.', `
+    return step(3, 'What happened after?', 'Medication and what helped. Everything here is optional.', `
       <div class="card"><p class="label">Medication taken</p>${chips('medication', OPT.medication, d.medication)}</div>
       <div class="card"><p class="label">What helped</p>${chips('helped', OPT.helped, d.helped)}</div>
       <div class="card"><p class="label">Note (optional)</p>
@@ -250,8 +245,8 @@ const screens = {
 
 function step(n, title, sub, body, next, back, cta = 'Next') {
   return `<div class="screen">
-    <div class="stephead"><button class="back" data-a="go" data-v="${back}">‹ Back</button><span class="progress">Step ${n} of 4</span></div>
-    <div class="segs">${[1,2,3,4].map(i => `<i class="${i <= n ? 'on' : ''}"></i>`).join('')}</div>
+    <div class="stephead"><button class="back" data-a="go" data-v="${back}">‹ Back</button><span class="progress">Step ${n} of 3</span></div>
+    <div class="segs">${[1,2,3].map(i => `<i class="${i <= n ? 'on' : ''}"></i>`).join('')}</div>
     <h1>${esc(title)}</h1><p class="sub">${esc(sub)}</p>${body}
     <div class="footer"><button class="btn" data-a="${next === 'save' ? 'save' : 'go'}" data-v="${next}">${cta}</button>
       <button class="skip" data-a="${next === 'save' ? 'save' : 'go'}" data-v="${next}">Skip this step</button></div></div>`;
@@ -304,7 +299,7 @@ function go(screen) {
   if (S.screen === 'log4') syncNote();
   if (screen === 'doctor' && S.screen !== 'doctor') { S.sum = null; S.editing = false; }
   S.screen = screen; render(); window.scrollTo(0, 0);
-  if (screen === 'log2') loadAuto();
+  if (screen === 'log1') loadAuto();
 }
 
 document.addEventListener('click', e => {

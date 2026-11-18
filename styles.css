@@ -32,7 +32,7 @@ p{margin:0}
 .stephead{display:flex;justify-content:space-between;align-items:center;margin-top:12px}
 .back{border:0;background:none;color:var(--primary);font:inherit;font-size:16px;padding:0;cursor:pointer}
 .progress{font-size:14px;color:var(--muted)}
-.segs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:-4px}
+.segs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:-4px}
 .segs i{height:4px;border-radius:2px;background:var(--track)}
 .segs i.on{background:var(--primary)}
 .footer{margin-top:auto;display:grid;gap:8px;padding-top:10px}
