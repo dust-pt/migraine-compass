@@ -63,13 +63,15 @@ const PT = {
   'Duration of each migraine': 'Duração de cada enxaqueca', '‹ All months': '‹ Todos os meses', 'No migraines logged this month.': 'Sem enxaquecas registadas neste mês.',
   'ongoing': 'a decorrer', 'not recorded': 'sem registo', 'Migraine in progress': 'Enxaqueca a decorrer', 'It ended': 'Terminou', 'Duration': 'Duração', 'Save': 'Guardar',
   'Filled in with the time since it started. Change it if it ended earlier.': 'Preenchido com o tempo desde que começou. Altere se terminou mais cedo.',
-  'Saved. Take care of yourself.': 'Guardado. Cuide de si.', 'rain': 'chuva', 'Location off': 'Localização desligada'
+  'Saved. Take care of yourself.': 'Guardado. Cuide de si.', 'See durations ›': 'Ver durações ›', 'Tap a migraine to see what you logged.': 'Toque numa enxaqueca para ver o que registou.',
+  'Routine': 'Rotina', 'Nothing else logged.': 'Nada mais registado.', 'rain': 'chuva', 'Location off': 'Localização desligada'
 };
 const L = s => (LANG === 'pt' && PT[s]) || s;
 // Text with numbers
 const TX = {
   since: (when, dur) => LANG === 'pt' ? `Desde ${when} · há ${dur}` : `Since ${when} · ${dur} ago`,
   startedAt: when => LANG === 'pt' ? `Começou ${when}.` : `Started ${when}.`,
+  detailHead: (t, n) => LANG === 'pt' ? `Começou às ${t} · intensidade ${n}/10` : `Started at ${t} · intensity ${n}/10`,
   stepOf: (n, t) => LANG === 'pt' ? `Passo ${n} de ${t}` : `Step ${n} of ${t}`,
   migraines: n => LANG === 'pt' ? `${n} enxaqueca${n === 1 ? '' : 's'}` : `${n} migraine${n === 1 ? '' : 's'}`,
   logged: n => LANG === 'pt' ? `${n} enxaqueca${n === 1 ? '' : 's'} registada${n === 1 ? '' : 's'}` : `${n} migraine${n === 1 ? '' : 's'} logged`,
