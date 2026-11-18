@@ -19,7 +19,15 @@ const read = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSO
 const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage blocked */ } };
 const logs = () => read('mc.logs', []).sort((a, b) => b.start.localeCompare(a.start));
 const saveLogs = v => write('mc.logs', v);
-const settings = () => Object.assign({ menstruation: true }, read('mc.settings', {}));
+const settings = () => Object.assign({ menstruation: true, theme: 'auto' }, read('mc.settings', {}));
+function applyTheme() {
+  const t = settings().theme;
+  const dark = t === 'dark' || (t === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = dark ? '#111A1B' : '#F4F7F7';
+}
+applyTheme();
+if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
 
 // ---------- State ----------
 const blankDraft = () => ({ started: 'Now', intensity: 7, ongoing: 'Yes', routine: [], food: [], feelings: [],
@@ -66,7 +74,7 @@ async function fetchWeather() {
     const j = await (await fetch(u)).json();
     const [y, t] = j.daily.temperature_2m_mean; const rain = j.daily.precipitation_sum[1] > 0.2;
     const diff = Math.round(t - y);
-    return `${diff > 0 ? '+' : diff < 0 ? '−' : '±'}${Math.abs(diff)} °C vs yesterday${rain ? ', rain' : ''}`;
+    return `${diff > 0 ? '+' : diff < 0 ? '−' : '±'}${Math.abs(diff)} °C${rain ? ', rain' : ''}`;
   } catch { return null; }
 }
 async function loadAuto() {
@@ -131,7 +139,7 @@ const screens = {
     const lastTxt = last ? [new Date(last.start).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }),
       `intensity ${last.intensity}/10`, last.durationH ? `about ${last.durationH} h` : null].filter(Boolean).join(' · ') : 'Nothing logged yet';
     return `<div class="screen">
-      <div class="brand"><span>Migraine Compass</span><button class="gear" data-a="go" data-v="settings" aria-label="Settings">⚙</button></div>
+      <div class="brand"><span>Migraine Compass</span><span><button class="gear" data-a="night" aria-label="Night mode">${document.documentElement.dataset.theme === 'dark' ? '☀' : '☾'}</button><button class="gear" data-a="go" data-v="settings" aria-label="Settings">⚙</button></span></div>
       <h1>How are you today?</h1>
       <button class="hero" data-a="start"><b>Log a migraine</b><span>Three quick steps: when and routine, food and feelings, what helped.</span><i>Start ›</i></button>
       <div class="card"><p class="label">Last migraine</p><p>${esc(lastTxt)}</p></div>
@@ -147,16 +155,16 @@ const screens = {
     const d = S.draft, a = d.auto;
     const list = OPT.routine.filter(o => settings().menstruation || o !== 'Menstruation');
     return step(1, 'When did it start?', 'How strong it is, and what changed in the last 24 hours.', `
+      <div class="autobox compact"><p class="label">Filled in automatically</p>
+        <div class="autogrid"><div><small>Sleep last night</small><b>${a ? hm(a.sleepMin) : '…'}</b></div>
+          <div><small>Weather</small><b>${a && a.weather ? esc(a.weather) : '…'}</b></div>
+          <div><small>Screen time</small><b>${a ? hm(a.screenMin) : '…'}</b></div></div>
+        <p class="note">With your permission: smartwatch, weather change since yesterday, phone. Sample data.</p></div>
       <div class="card"><p class="label">Started</p>${chips('started', OPT.started, d.started)}</div>
       <div class="card"><p class="label">Intensity (1 = mild, 10 = severe)</p>
         <div class="circles">${[1,2,3,4,5,6,7,8,9,10].map(n =>
           `<button class="chip" data-a="intensity" data-v="${n}" aria-pressed="${d.intensity === n}">${n}</button>`).join('')}</div></div>
       <div class="card"><p class="label">Still ongoing?</p>${chips('ongoing', OPT.ongoing, d.ongoing)}</div>
-      <div class="autobox"><p class="label">Filled in automatically</p>
-        <div class="autorow"><div>Sleep last night<small>From your smartwatch</small></div><b>${a ? hm(a.sleepMin) : '…'}</b></div>
-        <div class="autorow"><div>Weather today<small>From the internet, using your location</small></div><b>${a && a.weather ? esc(a.weather) : '…'}</b></div>
-        <div class="autorow"><div>Screen time yesterday<small>From your phone</small></div><b>${a ? hm(a.screenMin) : '…'}</b></div>
-        <p class="note">Read only with your permission. Sleep and screen time are sample data.</p></div>
       <div class="card"><p class="label">Any change in routine?</p>${chips('routine', list, d.routine)}
         <p class="note">Menstruation is optional and only appears if you turn it on in Settings.</p></div>`, 'log3', 'home');
   },
@@ -233,6 +241,10 @@ const screens = {
     const s = settings();
     return `<div class="screen"><div class="stephead"><button class="back" data-a="go" data-v="home">‹ Back</button></div>
       <h1>Settings</h1>
+      <div class="card"><p class="label">Night mode</p>
+        <p class="muted small" style="margin-bottom:10px">Darker, softer colours for light sensitivity.</p>
+        <div class="chips">${[['auto', 'Follow phone'], ['dark', 'On'], ['light', 'Off']].map(([k, l]) =>
+          `<button class="chip" data-a="theme" data-v="${k}" aria-pressed="${s.theme === k}">${l}</button>`).join('')}</div></div>
       <div class="card"><label class="switch"><span>Show “Menstruation” option</span>
         <input type="checkbox" id="menstruation" ${s.menstruation ? 'checked' : ''}></label></div>
       <div class="card"><p class="label">Test data</p>
@@ -330,6 +342,8 @@ document.addEventListener('click', e => {
     all.push(Object.assign({ id: 'l' + Date.now(), start: startFrom(started) }, rest));
     saveLogs(all); S.draft = blankDraft(); return go('saved');
   }
+  if (a === 'night') { write('mc.settings', Object.assign(settings(), { theme: document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark' })); applyTheme(); return render(); }
+  if (a === 'theme') { write('mc.settings', Object.assign(settings(), { theme: v })); applyTheme(); return render(); }
   if (a === 'edit') { S.editing = !S.editing; return render(); }
   if (a === 'email') {
     const s = S.sum;
