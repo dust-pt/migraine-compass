@@ -65,6 +65,16 @@ const PT = {
   'Filled in with the time since it started. Change it if it ended earlier.': 'Preenchido com o tempo desde que começou. Altere se terminou mais cedo.',
   'Saved. Take care of yourself.': 'Guardado. Cuide de si.', 'See durations ›': 'Ver durações ›', 'Tap a migraine to see what you logged.': 'Toque numa enxaqueca para ver o que registou.',
   'Routine': 'Rotina', 'Nothing else logged.': 'Nada mais registado.', 'Your entries are not saved in the cloud.': 'Os seus registos não são guardados na nuvem.', 'Feedback': 'Sugestões', 'Have a suggestion or found a problem? Tell the team in a short, anonymous form.': 'Tem uma sugestão ou encontrou um problema? Diga-nos num formulário curto e anónimo.',
+  'Add/remove': 'Adicionar/remover',
+  'Write another option': 'Escrever outra opção',
+  'Done': 'Concluído',
+  'Tap × to remove an option, + to add one.': 'Toque em × para remover uma opção e em + para adicionar.',
+  'More options': 'Mais opções',
+  'Answer the evaluation form': 'Responder ao questionário de avaliação',
+  'Thank you for trying the app': 'Obrigado por experimentar a app',
+  'You have logged 3 migraines. Would you answer a short form about the app? It takes about 5 minutes and is anonymous.': 'Já registou 3 enxaquecas. Pode responder a um questionário curto sobre a app? Demora cerca de 5 minutos e é anónimo.',
+  'Answer the form': 'Responder',
+  'Not now': 'Agora não',
   'Send a suggestion': 'Enviar sugestão', 'Suggestions go to a Google form. Please do not write your name or personal health details.': 'As sugestões vão para um formulário Google. Não escreva o seu nome nem dados de saúde pessoais.', 'rain': 'chuva', 'Location off': 'Localização desligada'
 };
 const L = s => (LANG === 'pt' && PT[s]) || s;

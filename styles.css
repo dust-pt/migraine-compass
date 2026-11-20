@@ -175,3 +175,10 @@ button.col{border:0;background:none;padding:0;font:inherit;cursor:pointer}
 .lasthead{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;border:0;background:none;padding:0;font:inherit;color:var(--ink);text-align:left;cursor:pointer}
 .lastcard.open .chev{transform:rotate(90deg)}
 .lastcard .mdetail{border-top:1px solid var(--line);margin-top:12px;padding-top:6px}
+/* Editing options inside a card */
+.editlink{display:block;margin-top:12px;font-size:14px}
+.card.editing{border-color:var(--primary)}
+.chip.ghost{display:inline-block;cursor:default}
+.chip.add{border-style:dashed;color:var(--primary)}
+.card.invite{border-color:var(--primary);background:var(--soft)}
+.card.invite .row .btn{flex:1}

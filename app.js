@@ -18,6 +18,7 @@ const EXTRA = {
 const SECTION = { food: 'Food and drink', feelings: 'How are you feeling?' };
 const UNITS = ['min', 'hours', 'days'];
 const FEEDBACK_FORM = 'https://docs.google.com/forms/d/e/1FAIpQLSfG9RKKRzTS_LGPfTIUviv5vzTiU6vG5_XAGU24vawXJuzG4g/viewform';
+const EVAL_FORM = 'https://docs.google.com/forms/d/e/1FAIpQLScND-Njh00GLtgika9plVlZOSR3kby6mKCc_xpSPN4hRtWqLA/viewform';
 const SINGLE = ['started', 'ongoing', 'medication', 'unit'];
 const EXCLUSIVE = { 'No change': 'routine', 'Nothing unusual': 'food' };
 
@@ -27,15 +28,15 @@ const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } ca
 const logs = () => read('mc.logs', []).sort((a, b) => b.start.localeCompare(a.start));
 const saveLogs = v => write('mc.logs', v);
 const settings = () => {
-  const s = Object.assign({ menstruation: true, theme: 'auto', extras: { food: [], feelings: [] }, custom: { food: [], feelings: [] } }, read('mc.settings', {}));
+  const s = Object.assign({ menstruation: true, theme: 'auto', extras: { food: [], feelings: [] }, custom: { food: [], feelings: [] }, hidden: { food: [], feelings: [] }, invite: 'new' }, read('mc.settings', {}));
   // older versions kept the person's own options inside "extras": move them to "custom"
   for (const g of ['food', 'feelings']) for (const o of s.extras[g] || []) if (!EXTRA[g].includes(o) && !s.custom[g].includes(o)) s.custom[g].push(o);
   return s;
 };
 const saveSettings = patch => write('mc.settings', Object.assign(settings(), patch));
-// Options shown in a section: base list plus extras switched on in Settings ("Nothing unusual" stays last)
+// Options shown in a section: base list (minus the ones removed) plus extras the person added ("Nothing unusual" stays last)
 function optionsFor(g) {
-  const st = settings(), base = OPT[g], on = st.extras[g] || [];
+  const st = settings(), hid = st.hidden[g] || [], base = OPT[g].filter(o => !hid.includes(o)), on = st.extras[g] || [];
   const extra = [...EXTRA[g], ...st.custom[g]].filter(x => on.includes(x)); // same order as in Settings
   const tail = base.filter(o => o === 'Nothing unusual');
   return [...base.filter(o => o !== 'Nothing unusual'), ...extra.filter(o => !base.includes(o)), ...tail];
@@ -54,7 +55,7 @@ if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListen
 // ---------- State ----------
 const blankDraft = () => ({ started: 'Now', intensity: 7, ongoing: 'Yes', durValue: 4, unit: 'hours', routine: [], food: [], feelings: [],
   medication: null, helped: [], note: '', auto: null });
-const S = { screen: 'home', draft: blankDraft(), period: '6m', sum: null, editing: false, month: null, end: null, openMig: null, lastOpen: false };
+const S = { screen: 'home', draft: blankDraft(), period: '6m', sum: null, editing: false, month: null, end: null, openMig: null, lastOpen: false, editG: null };
 
 // ---------- Helpers ----------
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -192,6 +193,8 @@ function monthDetail(key) {
     ${rows || `<p class="muted">${L('No migraines logged this month.')}</p>`}`;
 }
 
+// Invite people to the evaluation form once they have logged 3 migraines of their own (sample data does not count)
+const showInvite = all => settings().invite === 'new' && all.filter(l => !l.demo).length >= 3;
 const elapsedH = l => Math.max(0.25, (Date.now() - new Date(l.start).getTime()) / 36e5);
 // Pick a readable value and unit for a number of hours
 const toValUnit = h => h < 1 ? [Math.max(5, Math.round(h * 60 / 5) * 5), 'min'] : h < 48 ? [Math.round(h), 'hours'] : [Math.round(h / 24), 'days'];
@@ -210,6 +213,10 @@ const screens = {
         <p>${esc(TX.since(new Date(l.start).toLocaleString(LOC, { weekday: 'short', hour: '2-digit', minute: '2-digit' }).replace(/\./g, ''), fmtDur(elapsedH(l)).replace(' ', '\u00a0')))}</p></div>
         <button class="btn small-btn" data-a="endStart" data-v="${l.id}">${L('It ended')}</button></div>`).join('')}
       <button class="hero" data-a="start"><b>${L('Log a migraine')}</b><span>${L('Three quick steps: when and routine, food and feelings, what helped.')}</span><small class="privacy">${L('Your entries are not saved in the cloud.')}</small><i>${L('Start ›')}</i></button>
+      ${showInvite(all) ? `<div class="card invite"><p class="label">${L('Thank you for trying the app')}</p>
+        <p style="margin-bottom:10px">${L('You have logged 3 migraines. Would you answer a short form about the app? It takes about 5 minutes and is anonymous.')}</p>
+        <div class="row"><a class="btn" style="text-align:center;text-decoration:none" href="${EVAL_FORM}" target="_blank" rel="noopener" data-a="inviteDone">${L('Answer the form')}</a>
+        <button class="btn outline" data-a="inviteLater">${L('Not now')}</button></div></div>` : ''}
       ${last ? `<div class="card lastcard${S.lastOpen ? ' open' : ''}"><button class="lasthead" data-a="lastToggle" aria-expanded="${!!S.lastOpen}">
           <span><span class="label" style="display:block">${L('Last migraine')}</span><span>${esc(lastTxt)}</span></span><span class="chev">›</span></button>
           ${S.lastOpen ? migDetail(last) : ''}</div>`
@@ -248,8 +255,8 @@ const screens = {
   log3() {
     const d = S.draft;
     return step(2, 'Food, drink and feelings', 'Select what applies. Everything is optional.', `
-      <div class="card"><p class="label">${L('Food and drink')}</p>${chips('food', optionsFor('food'), d.food)}</div>
-      <div class="card"><p class="label">${L('How are you feeling?')}</p>${chips('feelings', optionsFor('feelings'), d.feelings)}</div>`, 'log4', 'log1');
+      ${optCard('food', d.food)}
+      ${optCard('feelings', d.feelings)}`, 'log4', 'log1');
   },
 
   log4() {
@@ -343,19 +350,9 @@ const screens = {
           `<button class="chip" data-a="theme" data-v="${k}" aria-pressed="${s.theme === k}">${L(l)}</button>`).join('')}</div></div>
       <div class="card"><label class="switch"><span>${L('Show “Menstruation” option')}</span>
         <input type="checkbox" id="menstruation" ${s.menstruation ? 'checked' : ''}></label></div>
-      <div class="card"><p class="label">${L('Extra options')}</p>
-        <p class="muted small" style="margin-bottom:10px">${L('Turn on options that are not in the app by default. They appear in the “Food, drink and feelings” step.')}</p>
-        ${['food', 'feelings'].map(g => `<p class="small" style="font-weight:600;margin:10px 0 8px">${L(SECTION[g])}</p>
-          <div class="chips">${EXTRA[g].map(o =>
-            `<button class="chip" data-a="extra" data-g="${g}" data-v="${esc(o)}" aria-pressed="${s.extras[g].includes(o)}">${esc(L(o))}</button>`).join('')}
-          ${s.custom[g].map(o => `<span class="chipwrap"><button class="chip" data-a="extra" data-g="${g}" data-v="${esc(o)}" aria-pressed="${s.extras[g].includes(o)}">${esc(o)}</button><button class="del" data-a="removeCustom" data-g="${g}" data-v="${esc(o)}" aria-label="${esc(TX.deleteLabel(o))}">×</button></span>`).join('')}</div>`).join('')}
-        <p class="note">${L('Tap an option to turn it on or off. Options you added yourself can be deleted with ×.')}</p>
-        <p class="small" style="font-weight:600;margin:14px 0 8px">${L('Add your own')}</p>
-        <div class="addrow"><input id="customText" type="text" maxlength="30" placeholder="${L('e.g. Blurred vision')}">
-          <select id="customGroup"><option value="feelings">${L('Feelings')}</option><option value="food">${L('Food and drink')}</option></select>
-          <button class="btn small-btn" data-a="addCustom">${L('Add')}</button></div></div>
       <div class="card"><p class="label">${L('Feedback')}</p>
         <p class="muted small" style="margin-bottom:10px">${L('Have a suggestion or found a problem? Tell the team in a short, anonymous form.')}</p>
+        <a class="btn outline" style="display:block;text-align:center;text-decoration:none;margin-bottom:10px" href="${EVAL_FORM}" target="_blank" rel="noopener">${L('Answer the evaluation form')}</a>
         <a class="btn" style="display:block;text-align:center;text-decoration:none" href="${FEEDBACK_FORM}" target="_blank" rel="noopener">${L('Send a suggestion')}</a>
         <p class="note">${L('Suggestions go to a Google form. Please do not write your name or personal health details.')}</p></div>
       <div class="card"><p class="label">${L('Test data')}</p>
@@ -365,6 +362,24 @@ const screens = {
       <p class="muted small">${L('Your entries are stored only on this device.')}</p></div>`;
   }
 };
+
+// A food/feelings card. "Add/remove" (bottom left) opens it for editing: × removes an option, + adds one back or adds a new one.
+function optCard(g, sel) {
+  const st = settings(), shown = optionsFor(g), editing = S.editG === g;
+  if (!editing) return `<div class="card"><p class="label">${L(SECTION[g])}</p>${chips(g, shown, sel)}
+    <button class="textlink small editlink" data-a="optEdit" data-g="${g}">${L('Add/remove')}</button></div>`;
+  const fixed = o => o === 'Nothing unusual';
+  const more = [...OPT[g].filter(o => (st.hidden[g] || []).includes(o)), ...EXTRA[g], ...st.custom[g]].filter(o => !shown.includes(o));
+  return `<div class="card editing"><p class="label">${L(SECTION[g])}</p>
+    <p class="note" style="margin:0 0 8px">${L('Tap × to remove an option, + to add one.')}</p>
+    <div class="chips">${shown.map(o => fixed(o) ? `<span class="chip ghost">${esc(L(o))}</span>`
+      : `<span class="chipwrap"><span class="chip ghost">${esc(L(o))}</span><button class="del" data-a="optRemove" data-g="${g}" data-v="${esc(o)}" aria-label="${esc(TX.deleteLabel(L(o)))}">×</button></span>`).join('')}</div>
+    ${more.length ? `<p class="small" style="font-weight:600;margin:14px 0 8px">${L('More options')}</p>
+    <div class="chips">${more.map(o => `<button class="chip add" data-a="optAdd" data-g="${g}" data-v="${esc(o)}">+ ${esc(L(o))}</button>`).join('')}</div>` : ''}
+    <div class="addrow" style="margin-top:12px"><input id="customText" type="text" maxlength="30" placeholder="${L('Write another option')}">
+      <button class="btn small-btn" data-a="addCustom" data-g="${g}">${L('Add')}</button></div>
+    <button class="textlink small editlink" data-a="optDone">${L('Done')}</button></div>`;
+}
 
 function step(n, title, sub, body, next, back, cta = 'Next') {
   title = L(title); sub = L(sub); cta = L(cta);
@@ -425,6 +440,7 @@ function go(screen) {
   if (S.screen === 'log4') syncNote();
   if (screen === 'doctor' && S.screen !== 'doctor') { S.sum = null; S.editing = false; }
   if (screen !== 'history') S.month = null;
+  S.editG = null;
   S.screen = screen; render(); window.scrollTo(0, 0);
   if (screen === 'log1') loadAuto();
 }
@@ -478,26 +494,37 @@ document.addEventListener('click', e => {
     saveLogs(all); S.draft = blankDraft(); return go('saved');
   }
   if (a === 'night') { write('mc.settings', Object.assign(settings(), { theme: document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark' })); applyTheme(); return render(); }
-  if (a === 'extra') {
-    const g = el.dataset.g, ex = settings().extras, arr = ex[g] || (ex[g] = []), i = arr.indexOf(v);
-    if (i >= 0) arr.splice(i, 1); else arr.push(v);
-    saveSettings({ extras: ex }); return render();
+  if (a === 'optEdit') { S.editG = el.dataset.g; return render(); }
+  if (a === 'optDone') { S.editG = null; return render(); }
+  if (a === 'optRemove') {
+    const g = el.dataset.g, st = settings();
+    if (OPT[g].includes(v)) { if (!st.hidden[g].includes(v)) st.hidden[g].push(v); }
+    else if (st.custom[g].includes(v)) st.custom[g] = st.custom[g].filter(o => o !== v);
+    st.extras[g] = st.extras[g].filter(o => o !== v);
+    D[g] = D[g].filter(o => o !== v);
+    saveSettings({ hidden: st.hidden, extras: st.extras, custom: st.custom }); toast(TX.deleted(L(v))); return render();
+  }
+  if (a === 'optAdd') {
+    const g = el.dataset.g, st = settings();
+    st.hidden[g] = st.hidden[g].filter(o => o !== v);
+    if (!OPT[g].includes(v) && !st.extras[g].includes(v)) st.extras[g].push(v);
+    saveSettings({ hidden: st.hidden, extras: st.extras }); return render();
   }
   if (a === 'addCustom') {
-    const t = document.getElementById('customText').value.trim().replace(/\s+/g, ' ');
-    const g = document.getElementById('customGroup').value;
+    const t = document.getElementById('customText').value.trim().replace(/\s+/g, ' '), g = el.dataset.g, st = settings();
     if (!t) return toast(L('Type an option first'));
-    const ex = settings().extras; ex[g] = ex[g] || [];
-    const cu = settings().custom; cu[g] = cu[g] || [];
-    if (OPT[g].includes(t) || EXTRA[g].includes(t) || cu[g].includes(t)) return toast(L('That option already exists'));
-    cu[g].push(t); ex[g].push(t);
-    saveSettings({ extras: ex, custom: cu }); toast(TX.added(L(SECTION[g]))); return render();
+    const all = [...OPT[g], ...EXTRA[g], ...st.custom[g]];
+    const same = all.find(o => o.toLowerCase() === t.toLowerCase() || L(o).toLowerCase() === t.toLowerCase());
+    if (same) { // already exists: just show it again
+      st.hidden[g] = st.hidden[g].filter(o => o !== same);
+      if (!OPT[g].includes(same) && !st.extras[g].includes(same)) st.extras[g].push(same);
+      saveSettings({ hidden: st.hidden, extras: st.extras }); return render();
+    }
+    st.custom[g].push(t); st.extras[g].push(t);
+    saveSettings({ extras: st.extras, custom: st.custom }); toast(TX.added(L(SECTION[g]))); return render();
   }
-  if (a === 'removeCustom') {
-    const g = el.dataset.g, st = settings();
-    st.custom[g] = st.custom[g].filter(o => o !== v); st.extras[g] = st.extras[g].filter(o => o !== v);
-    saveSettings({ custom: st.custom, extras: st.extras }); toast(TX.deleted(L(v))); return render();
-  }
+  if (a === 'inviteDone') { saveSettings({ invite: 'done' }); setTimeout(render, 300); return; }
+  if (a === 'inviteLater') { saveSettings({ invite: 'later' }); return render(); }
   if (a === 'dur') { D.durValue = Math.max(1, Math.min(999, (+D.durValue || 1) + +v)); return render(); }
   if (a === 'theme') { write('mc.settings', Object.assign(settings(), { theme: v })); applyTheme(); return render(); }
   if (a === 'ai') { if (S.sum && !S.sum.loading) draftWithAI(stats(logs())); return; }
