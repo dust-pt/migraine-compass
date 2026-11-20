@@ -3,7 +3,7 @@
 
 // ---------- Options (same as Figma) ----------
 const OPT = {
-  started: ['Now', '1 h ago', 'Earlier today', 'Yesterday'],
+  started: ['Now', '1 h ago', 'Earlier today', 'Yesterday', 'Another day'],
   ongoing: ['Yes', 'No'],
   routine: ['Irregular schedule', 'Skipped exercise', 'More exercise', 'Sun exposure', 'Trip', 'Late night', 'Menstruation', 'No change'],
   food: ['Skipped a meal', 'Late meal', 'Coffee', 'Alcohol', 'Chocolate', 'Aged cheese', 'Processed food', 'Little water', 'Nothing unusual'],
@@ -60,7 +60,7 @@ applyTheme();
 if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
 
 // ---------- State ----------
-const blankDraft = () => ({ started: 'Now', intensity: 7, ongoing: 'Yes', durValue: 4, unit: 'hours', routine: [], food: [], feelings: [],
+const blankDraft = () => ({ started: 'Now', date: new Date(Date.now() - 2 * 864e5 - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 10), time: '12:00', intensity: 7, ongoing: 'Yes', durValue: 4, unit: 'hours', routine: [], food: [], feelings: [],
   medication: null, helped: [], note: '', auto: null });
 const S = { screen: 'home', draft: blankDraft(), period: '6m', sum: null, editing: false, month: null, end: null, openMig: null, lastOpen: false, editG: null };
 
@@ -70,7 +70,12 @@ const DAY = 864e5;
 const hm = min => `${Math.floor(min / 60)} h ${String(Math.round(min % 60)).padStart(2, '0')} min`;
 const monthKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 const localISO = d => { const x = new Date(d); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0, 16); };
-const startFrom = opt => {
+const dayISO = d => localISO(d).slice(0, 10);
+const startFrom = (opt, date, time) => {
+  if (opt === 'Another day' && date) { // a past migraine: chosen day and time, never in the future
+    const d = new Date(`${date}T${time || '12:00'}`);
+    return localISO(isNaN(d) || d > new Date() ? new Date() : d);
+  }
   const d = new Date();
   if (opt === '1 h ago') d.setHours(d.getHours() - 1);
   if (opt === 'Earlier today') d.setHours(Math.max(0, d.getHours() - 4));
@@ -96,21 +101,26 @@ function sampleAuto() {
   const rnd = (a, b) => Math.round(a + Math.random() * (b - a));
   return { sleepMin: rnd(280, 460), screenMin: rnd(180, 480), weather: null };
 }
-async function fetchWeather() {
+// Weather change between the day before and the day the migraine started (works for past days too)
+async function fetchWeather(day = new Date()) {
   try {
     const pos = await new Promise((ok, no) => navigator.geolocation.getCurrentPosition(ok, no, { timeout: 6000, maximumAge: 600000 }));
     const { latitude: la, longitude: lo } = pos.coords;
-    const u = `https://api.open-meteo.com/v1/forecast?latitude=${la}&longitude=${lo}&daily=temperature_2m_mean,precipitation_sum&past_days=1&forecast_days=1&timezone=auto`;
+    const end = dayISO(day), start = dayISO(new Date(day.getTime() - DAY));
+    const old = Date.now() - day.getTime() > 80 * DAY; // the forecast API keeps about 3 months; older days come from the archive
+    const host = old ? 'archive-api.open-meteo.com/v1/archive' : 'api.open-meteo.com/v1/forecast';
+    const u = `https://${host}?latitude=${la}&longitude=${lo}&daily=temperature_2m_mean,precipitation_sum&start_date=${start}&end_date=${end}&timezone=auto`;
     const j = await (await fetch(u)).json();
     const [y, t] = j.daily.temperature_2m_mean; const rain = j.daily.precipitation_sum[1] > 0.2;
     const diff = Math.round(t - y);
     return `${diff > 0 ? '+' : diff < 0 ? '−' : '±'}${Math.abs(diff)} °C${rain ? ', ' + L('rain') : ''}`;
   } catch { return null; }
 }
-async function loadAuto() {
-  const d = S.draft; if (d.auto) return;
-  d.auto = sampleAuto(); render();
-  const w = await fetchWeather();
+async function loadAuto(force) {
+  const d = S.draft; if (d.auto && !force) return;
+  if (!d.auto) d.auto = sampleAuto();
+  d.auto.weather = null; render();
+  const w = await fetchWeather(new Date(startFrom(d.started, d.date, d.time)));
   d.auto.weather = w || L('Location off');
   if (S.screen === 'log1') render();
 }
@@ -258,7 +268,10 @@ const screens = {
           <div><small>${L('Weather')}</small><b>${a && a.weather ? esc(a.weather) : '…'}</b></div>
           <div><small>${L('Screen time')}</small><b>${a ? hm(a.screenMin) : '…'}</b></div></div>
         <p class="note">${L('With your permission: smartwatch, weather change since yesterday, phone. Sample data.')}</p></div>
-      <div class="card"><p class="label">${L('Started')}</p>${chips('started', OPT.started, d.started)}</div>
+      <div class="card"><p class="label">${L('Started')}</p>${chips('started', OPT.started, d.started)}
+        ${d.started === 'Another day' ? `<div class="pastrow"><label><small>${L('Day')}</small><input id="pastDate" type="date" max="${dayISO(new Date())}" value="${d.date}"></label>
+          <label><small>${L('Time (about)')}</small><input id="pastTime" type="time" value="${d.time}"></label></div>
+          <p class="note">${L('For a migraine that happened before. The weather is looked up for that day.')}</p>` : ''}</div>
       <div class="card"><p class="label">${L('Intensity (1 = mild, 10 = severe)')}</p>
         <div class="circles">${[1,2,3,4,5,6,7,8,9,10].map(n =>
           `<button class="chip" data-a="intensity" data-v="${n}" aria-pressed="${d.intensity === n}">${n}</button>`).join('')}</div></div>
@@ -490,7 +503,13 @@ document.addEventListener('click', e => {
   }
   if (a === 'chip') {
     const g = el.dataset.g;
-    if (SINGLE.includes(g)) D[g] = (g === 'medication' && D[g] === v) ? null : v;
+    if (SINGLE.includes(g)) {
+      const before = D[g]; D[g] = (g === 'medication' && D[g] === v) ? null : v;
+      if (g === 'started' && before !== v) {
+        if (v === 'Another day') D.ongoing = 'No'; // a past migraine has usually ended
+        loadAuto(true);
+      }
+    }
     else {
       const arr = D[g], i = arr.indexOf(v);
       if (i >= 0) arr.splice(i, 1);
@@ -508,7 +527,8 @@ document.addEventListener('click', e => {
     const all = read('mc.logs', []);
     const { durValue, unit, ...entry } = rest;
     if (entry.ongoing === 'No') entry.durationH = Math.round(toHours(+durValue || 1, unit) * 100) / 100;
-    all.push(Object.assign({ id: 'l' + Date.now(), start: startFrom(started) }, entry));
+    const { date, time, ...clean } = entry;
+    all.push(Object.assign({ id: 'l' + Date.now(), start: startFrom(started, date, time) }, clean));
     saveLogs(all); S.draft = blankDraft(); return go('saved');
   }
   if (a === 'night') { write('mc.settings', Object.assign(settings(), { theme: document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark' })); applyTheme(); return render(); }
@@ -565,6 +585,12 @@ document.addEventListener('click', e => {
   if (a === 'clear') { if (confirm(L('Delete all migraine entries on this device?'))) { saveLogs([]); toast(L('All entries deleted')); } return; }
 });
 document.addEventListener('change', e => {
+  if (e.target.id === 'pastDate' || e.target.id === 'pastTime') {
+    const today = dayISO(new Date());
+    if (e.target.id === 'pastDate') S.draft.date = e.target.value && e.target.value <= today ? e.target.value : today;
+    else S.draft.time = e.target.value || '12:00';
+    loadAuto(true); return;
+  }
 });
 document.addEventListener('input', e => {
   if (e.target.id === 'note') S.draft.note = e.target.value;
