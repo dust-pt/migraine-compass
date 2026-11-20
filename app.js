@@ -185,7 +185,11 @@ function migDetail(l) {
     ['Medication taken', l.medication ? [l.medication] : []],
     ['What helped', l.helped || []]
   ].filter(([, v]) => v.length);
-  return `<div class="mdetail"><p class="small muted">${esc(TX.detailHead(time, l.intensity))}</p>
+  const a = l.auto || {};
+  const weather = a.weather && a.weather !== L('Location off') ? a.weather : L('no data');
+  const facts = `<div class="dfacts"><div><small>${L('Sleep the night before')}</small><b>${a.sleepMin ? hm(a.sleepMin) : L('no data')}</b></div>
+    <div><small>${L('Weather change that day')}</small><b>${esc(weather)}</b></div></div>`;
+  return `<div class="mdetail"><p class="small muted">${esc(TX.detailHead(time, l.intensity))}</p>${facts}
     ${groups.map(([g, v]) => `<p class="mlabel">${L(g)}</p>${tags(v)}`).join('') || `<p class="small muted">${L('Nothing else logged.')}</p>`}
     ${l.note ? `<p class="mlabel">${L('Note (optional)').replace(/ \(.*\)/, '')}</p><p class="small">${esc(l.note)}</p>` : ''}</div>`;
 }
@@ -453,7 +457,8 @@ function demoLogs() {
     const d = new Date(now - ago * DAY); d.setHours(9 + i % 8, 0, 0, 0);
     const e = { id: 'demo' + i, demo: true, start: localISO(d), intensity, durationH, ongoing: 'No', routine: [], food: [], feelings: [],
       medication: i % 3 ? 'Took medication' : 'No medication', helped: i % 2 ? ['Dark room', 'Sleep'] : ['Rest'], note: '',
-      auto: { sleepMin: f.includes('sleep') ? 320 : 430, screenMin: 380, weather: null } };
+      auto: { sleepMin: f.includes('sleep') ? 320 + (i * 7) % 30 : 430 + (i * 11) % 40, screenMin: 380,
+        weather: ['−4 °C, ' + L('rain'), '+5 °C', '±0 °C', '−6 °C, ' + L('rain'), '+3 °C', '−2 °C', '+7 °C', '−3 °C, ' + L('rain'), '+1 °C'][i % 9] } };
     f.filter(x => x !== 'sleep').forEach(x => e[where(x)].push(x));
     return e;
   });
