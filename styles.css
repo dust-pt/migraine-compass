@@ -182,3 +182,6 @@ button.col{border:0;background:none;padding:0;font:inherit;cursor:pointer}
 .chip.add{border-style:dashed;color:var(--primary)}
 .card.invite{border-color:var(--primary);background:var(--soft)}
 .card.invite .row .btn{flex:1}
+.toplinks{display:flex;gap:16px}
+.sharegrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0 4px}
+.sharegrid .btn{text-align:center;text-decoration:none;padding:12px 8px}

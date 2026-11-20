@@ -75,6 +75,15 @@ const PT = {
   'You have logged 3 migraines. Would you answer a short form about the app? It takes about 5 minutes and is anonymous.': 'Já registou 3 enxaquecas. Pode responder a um questionário curto sobre a app? Demora cerca de 5 minutos e é anónimo.',
   'Answer the form': 'Responder',
   'Not now': 'Agora não',
+  'Menstruation is optional: remove it with Add/remove if you do not need it.': 'A menstruação é opcional: remova-a em Adicionar/remover se não precisar.',
+  'Share': 'Partilhar',
+  'Share the app': 'Partilhar a app',
+  'Close': 'Fechar',
+  'Email': 'Email',
+  'Copy link': 'Copiar link',
+  'Link copied': 'Link copiado',
+  'Only the link is shared, never your entries.': 'Só é partilhado o link, nunca os seus registos.',
+  'I use Migraine Compass to log my migraines. Try it:': 'Uso a Migraine Compass para registar as minhas enxaquecas. Experimente:',
   'Send a suggestion': 'Enviar sugestão', 'Suggestions go to a Google form. Please do not write your name or personal health details.': 'As sugestões vão para um formulário Google. Não escreva o seu nome nem dados de saúde pessoais.', 'rain': 'chuva', 'Location off': 'Localização desligada'
 };
 const L = s => (LANG === 'pt' && PT[s]) || s;

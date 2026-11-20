@@ -12,10 +12,13 @@ const OPT = {
   helped: ['Dark room', 'Rest', 'Sleep']
 };
 const EXTRA = {
+  routine: [],
   food: ['Red wine', 'Citrus fruit', 'Cured meats', 'Artificial sweeteners', 'Energy drink', 'Fasting'],
   feelings: ['Nauseous', 'Dizzy', 'Sensitive to light', 'Sensitive to noise', 'Aura', 'Neck pain', 'Overwhelmed']
 };
-const SECTION = { food: 'Food and drink', feelings: 'How are you feeling?' };
+const SECTION = { food: 'Food and drink', feelings: 'How are you feeling?', routine: 'Any change in routine?' };
+const APP_URL = 'https://migraine-compass.pages.dev';
+const GROUPS = ['routine', 'food', 'feelings'];
 const UNITS = ['min', 'hours', 'days'];
 const FEEDBACK_FORM = 'https://docs.google.com/forms/d/e/1FAIpQLSfG9RKKRzTS_LGPfTIUviv5vzTiU6vG5_XAGU24vawXJuzG4g/viewform';
 const EVAL_FORM = 'https://docs.google.com/forms/d/e/1FAIpQLScND-Njh00GLtgika9plVlZOSR3kby6mKCc_xpSPN4hRtWqLA/viewform';
@@ -28,7 +31,11 @@ const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } ca
 const logs = () => read('mc.logs', []).sort((a, b) => b.start.localeCompare(a.start));
 const saveLogs = v => write('mc.logs', v);
 const settings = () => {
-  const s = Object.assign({ menstruation: true, theme: 'auto', extras: { food: [], feelings: [] }, custom: { food: [], feelings: [] }, hidden: { food: [], feelings: [] }, invite: 'new' }, read('mc.settings', {}));
+  const s = Object.assign({ theme: 'auto', extras: {}, custom: {}, hidden: {}, invite: 'new' }, read('mc.settings', {}));
+  for (const k of ['extras', 'custom', 'hidden']) for (const g of GROUPS) s[k][g] = s[k][g] || [];
+  // older versions had a Settings switch for Menstruation: keep the person's choice as a hidden option
+  if (s.menstruation === false && !s.hidden.routine.includes('Menstruation')) s.hidden.routine.push('Menstruation');
+  delete s.menstruation;
   // older versions kept the person's own options inside "extras": move them to "custom"
   for (const g of ['food', 'feelings']) for (const o of s.extras[g] || []) if (!EXTRA[g].includes(o) && !s.custom[g].includes(o)) s.custom[g].push(o);
   return s;
@@ -38,8 +45,8 @@ const saveSettings = patch => write('mc.settings', Object.assign(settings(), pat
 function optionsFor(g) {
   const st = settings(), hid = st.hidden[g] || [], base = OPT[g].filter(o => !hid.includes(o)), on = st.extras[g] || [];
   const extra = [...EXTRA[g], ...st.custom[g]].filter(x => on.includes(x)); // same order as in Settings
-  const tail = base.filter(o => o === 'Nothing unusual');
-  return [...base.filter(o => o !== 'Nothing unusual'), ...extra.filter(o => !base.includes(o)), ...tail];
+  const last = o => o === 'Nothing unusual' || o === 'No change';
+  return [...base.filter(o => !last(o)), ...extra.filter(o => !base.includes(o)), ...base.filter(last)];
 }
 const toHours = (v, u) => u === 'min' ? v / 60 : u === 'days' ? v * 24 : v;
 const fmtDur = h => h < 1 ? `${Math.round(h * 60)} min` : h >= 24 ? TX.days(Math.round(h / 24 * 10) / 10) : `${Math.round(h * 10) / 10} h`;
@@ -195,6 +202,19 @@ function monthDetail(key) {
 
 // Invite people to the evaluation form once they have logged 3 migraines of their own (sample data does not count)
 const showInvite = all => settings().invite === 'new' && all.filter(l => !l.demo).length >= 3;
+// Share the app: the phone's own share sheet when there is one, otherwise a few direct links
+const shareText = () => L('I use Migraine Compass to log my migraines. Try it:');
+function shareSheet() {
+  const t = encodeURIComponent(shareText() + ' ' + APP_URL);
+  return `<div class="card sharecard"><div class="dhead"><p class="label" style="margin:0">${L('Share the app')}</p>
+      <button class="textlink small" style="margin:0" data-a="shareClose">${L('Close')}</button></div>
+    <div class="sharegrid">
+      <a class="btn outline" href="https://wa.me/?text=${t}" target="_blank" rel="noopener">WhatsApp</a>
+      <a class="btn outline" href="mailto:?subject=${encodeURIComponent('Migraine Compass')}&body=${t}">${L('Email')}</a>
+      <a class="btn outline" href="sms:?&body=${t}">SMS</a>
+      <button class="btn outline" data-a="shareCopy">${L('Copy link')}</button></div>
+    <p class="note">${L('Only the link is shared, never your entries.')}</p></div>`;
+}
 const elapsedH = l => Math.max(0.25, (Date.now() - new Date(l.start).getTime()) / 36e5);
 // Pick a readable value and unit for a number of hours
 const toValUnit = h => h < 1 ? [Math.max(5, Math.round(h * 60 / 5) * 5), 'min'] : h < 48 ? [Math.round(h), 'hours'] : [Math.round(h / 24), 'days'];
@@ -207,7 +227,8 @@ const screens = {
     const lastTxt = last ? [new Date(last.start).toLocaleDateString(LOC, { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, ''),
       TX.intensity(last.intensity), last.durationH ? TX.about(fmtDur(last.durationH)) : null].filter(Boolean).join(' · ') : L('Nothing logged yet');
     return `<div class="screen">
-      <div class="brand"><span>Migraine Compass</span><button class="textlink small" style="margin:0" data-a="go" data-v="settings">${L('Settings')}</button></div>
+      <div class="brand"><span>Migraine Compass</span><span class="toplinks"><button class="textlink small" style="margin:0" data-a="share">${L('Share')}</button><button class="textlink small" style="margin:0" data-a="go" data-v="settings">${L('Settings')}</button></span></div>
+      ${S.share ? shareSheet() : ''}
       <h1>${L('How are you today?')}</h1>
       ${all.filter(l => l.ongoing === 'Yes').map(l => `<div class="card ongoing"><div><p class="label" style="margin-bottom:4px">${L('Migraine in progress')}</p>
         <p>${esc(TX.since(new Date(l.start).toLocaleString(LOC, { weekday: 'short', hour: '2-digit', minute: '2-digit' }).replace(/\./g, ''), fmtDur(elapsedH(l)).replace(' ', '\u00a0')))}</p></div>
@@ -231,7 +252,6 @@ const screens = {
 
   log1() {
     const d = S.draft, a = d.auto;
-    const list = OPT.routine.filter(o => settings().menstruation || o !== 'Menstruation');
     return step(1, 'When did it start?', 'How strong it is, and what changed in the last 24 hours.', `
       <div class="autobox compact"><p class="label">${L('Filled in automatically')}</p>
         <div class="autogrid"><div><small>${L('Sleep last night')}</small><b>${a ? hm(a.sleepMin) : '…'}</b></div>
@@ -248,8 +268,7 @@ const screens = {
             <input id="durValue" type="number" inputmode="numeric" min="1" max="999" value="${d.durValue}">
             <button data-a="dur" data-v="1" aria-label="${L('More')}">+</button></div>
             ${chips('unit', UNITS, d.unit)}</div></div>` : ''}</div>
-      <div class="card"><p class="label">${L('Any change in routine?')}</p>${chips('routine', list, d.routine)}
-        <p class="note">${L('Menstruation is optional and only appears if you turn it on in Settings.')}</p></div>`, 'log3', 'home');
+      ${optCard('routine', d.routine)}`, 'log3', 'home');
   },
 
   log3() {
@@ -348,8 +367,6 @@ const screens = {
         <p class="muted small" style="margin-bottom:10px">${L('Darker, softer colours for light sensitivity.')}</p>
         <div class="chips">${[['auto', 'Follow phone'], ['dark', 'On'], ['light', 'Off']].map(([k, l]) =>
           `<button class="chip" data-a="theme" data-v="${k}" aria-pressed="${s.theme === k}">${L(l)}</button>`).join('')}</div></div>
-      <div class="card"><label class="switch"><span>${L('Show “Menstruation” option')}</span>
-        <input type="checkbox" id="menstruation" ${s.menstruation ? 'checked' : ''}></label></div>
       <div class="card"><p class="label">${L('Feedback')}</p>
         <p class="muted small" style="margin-bottom:10px">${L('Have a suggestion or found a problem? Tell the team in a short, anonymous form.')}</p>
         <a class="btn outline" style="display:block;text-align:center;text-decoration:none;margin-bottom:10px" href="${EVAL_FORM}" target="_blank" rel="noopener">${L('Answer the evaluation form')}</a>
@@ -366,9 +383,10 @@ const screens = {
 // A food/feelings card. "Add/remove" (bottom left) opens it for editing: × removes an option, + adds one back or adds a new one.
 function optCard(g, sel) {
   const st = settings(), shown = optionsFor(g), editing = S.editG === g;
-  if (!editing) return `<div class="card"><p class="label">${L(SECTION[g])}</p>${chips(g, shown, sel)}
+  const hint = g === 'routine' && shown.includes('Menstruation') ? `<p class="note">${L('Menstruation is optional: remove it with Add/remove if you do not need it.')}</p>` : '';
+  if (!editing) return `<div class="card"><p class="label">${L(SECTION[g])}</p>${chips(g, shown, sel)}${hint}
     <button class="textlink small editlink" data-a="optEdit" data-g="${g}">${L('Add/remove')}</button></div>`;
-  const fixed = o => o === 'Nothing unusual';
+  const fixed = o => o === 'Nothing unusual' || o === 'No change';
   const more = [...OPT[g].filter(o => (st.hidden[g] || []).includes(o)), ...EXTRA[g], ...st.custom[g]].filter(o => !shown.includes(o));
   return `<div class="card editing"><p class="label">${L(SECTION[g])}</p>
     <p class="note" style="margin:0 0 8px">${L('Tap × to remove an option, + to add one.')}</p>
@@ -494,6 +512,14 @@ document.addEventListener('click', e => {
     saveLogs(all); S.draft = blankDraft(); return go('saved');
   }
   if (a === 'night') { write('mc.settings', Object.assign(settings(), { theme: document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark' })); applyTheme(); return render(); }
+  if (a === 'share') {
+    if (navigator.share) { navigator.share({ title: 'Migraine Compass', text: shareText(), url: APP_URL }).catch(() => {}); return; }
+    S.share = !S.share; return render();
+  }
+  if (a === 'shareClose') { S.share = false; return render(); }
+  if (a === 'shareCopy') {
+    (navigator.clipboard ? navigator.clipboard.writeText(APP_URL) : Promise.reject()).then(() => toast(L('Link copied')), () => toast(APP_URL)); return;
+  }
   if (a === 'optEdit') { S.editG = el.dataset.g; return render(); }
   if (a === 'optDone') { S.editG = null; return render(); }
   if (a === 'optRemove') {
@@ -539,7 +565,6 @@ document.addEventListener('click', e => {
   if (a === 'clear') { if (confirm(L('Delete all migraine entries on this device?'))) { saveLogs([]); toast(L('All entries deleted')); } return; }
 });
 document.addEventListener('change', e => {
-  if (e.target.id === 'menstruation') write('mc.settings', Object.assign(settings(), { menstruation: e.target.checked }));
 });
 document.addEventListener('input', e => {
   if (e.target.id === 'note') S.draft.note = e.target.value;
