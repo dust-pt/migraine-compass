@@ -402,11 +402,11 @@ function optCard(g, sel) {
 function step(n, title, sub, body, next, back, cta = 'Next') {
   title = L(title); sub = L(sub); cta = L(cta);
   return `<div class="screen">
-    <div class="stephead"><button class="back" data-a="go" data-v="${back}">${L('‹ Back')}</button><span class="progress">${TX.stepOf(n, 3)}</span></div>
+    <div class="stephead"><button class="back" data-a="go" data-v="${back}">${L('‹ Back')}</button><span class="progress">${TX.stepOf(n, 3)}</span>
+      <button class="back skiptop" data-a="${next === 'save' ? 'save' : 'go'}" data-v="${next}">${L('Skip ›')}</button></div>
     <div class="segs">${[1,2,3].map(i => `<i class="${i <= n ? 'on' : ''}"></i>`).join('')}</div>
     <h1>${esc(title)}</h1><p class="sub">${esc(sub)}</p>${body}
-    <div class="footer"><button class="btn" data-a="${next === 'save' ? 'save' : 'go'}" data-v="${next}">${cta}</button>
-      <button class="skip" data-a="${next === 'save' ? 'save' : 'go'}" data-v="${next}">${L('Skip this step')}</button></div></div>`;
+    <div class="footer"><button class="btn" data-a="${next === 'save' ? 'save' : 'go'}" data-v="${next}">${cta}</button></div></div>`;
 }
 
 // ---------- AI draft (Cloudflare function → Gemini) ----------

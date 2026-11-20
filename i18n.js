@@ -33,7 +33,7 @@ const PT = {
   'What happened after?': 'O que aconteceu depois?', 'Medication and what helped. Everything here is optional.': 'Medicação e o que ajudou. Tudo aqui é opcional.',
   'Medication taken': 'Medicação tomada', 'What helped': 'O que ajudou', 'Note (optional)': 'Nota (opcional)',
   'Tap to write anything else worth remembering…': 'Toque para escrever algo mais que valha a pena lembrar…', 'Save migraine': 'Guardar enxaqueca',
-  'Next': 'Seguinte', 'Skip this step': 'Saltar este passo', '‹ Back': '‹ Voltar', 'Less': 'Menos', 'More': 'Mais',
+  'Next': 'Seguinte', 'Skip this step': 'Saltar este passo', 'Skip ›': 'Saltar ›', '‹ Back': '‹ Voltar', 'Less': 'Menos', 'More': 'Mais',
   'Migraine logged': 'Enxaqueca registada', 'It has been added to your History. Take care of yourself.': 'Foi adicionada ao seu histórico. Cuide de si.',
   'Go to History': 'Ver histórico', 'Back to Home': 'Voltar ao início',
   // history
