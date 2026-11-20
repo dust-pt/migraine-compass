@@ -1,5 +1,6 @@
-// Service worker: app shell cached for offline use. Bump VERSION to force an update.
-const VERSION = 'mc-v19';
+// Service worker: network first, so a new deploy shows up on the next load; the cache is only used offline.
+// Bump VERSION on each deploy so open pages notice the new worker and refresh.
+const VERSION = 'mc-v20';
 const SHELL = [
   './', 'index.html', 'styles.css', 'i18n.js', 'app.js', 'manifest.webmanifest',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'
@@ -23,12 +24,9 @@ self.addEventListener('fetch', e => {
   // Only handle same-origin GETs; API and weather calls go straight to the network.
   if (req.method !== 'GET' || url.origin !== location.origin || url.pathname.startsWith('/api/')) return;
   e.respondWith(
-    caches.match(req).then(hit => {
-      const net = fetch(req).then(res => {
-        if (res.ok) caches.open(VERSION).then(c => c.put(req, res.clone()));
-        return res;
-      }).catch(() => hit);
-      return hit || net;
-    })
+    fetch(req, { cache: 'no-cache' }).then(res => {
+      if (res.ok) { const copy = res.clone(); caches.open(VERSION).then(c => c.put(req, copy)); }
+      return res;
+    }).catch(() => caches.match(req).then(hit => hit || caches.match('index.html')))
   );
 });

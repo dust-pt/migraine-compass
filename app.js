@@ -575,4 +575,25 @@ document.addEventListener('input', e => {
 });
 
 render();
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+// Updates: check for a new version when the app opens or comes back to the front. When a new version takes over,
+// reload at once, unless the person is in the middle of logging; then offer a button so nothing typed is lost.
+if ('serviceWorker' in navigator) {
+  let hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+    const check = () => reg.update().catch(() => {});
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+    setInterval(check, 30 * 60 * 1000);
+  }).catch(() => {});
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController) { hadController = true; return; } // first install: nothing to refresh
+    if (reloading) return;
+    const busy = ['log1', 'log3', 'log4', 'end'].includes(S.screen);
+    if (!busy) { reloading = true; location.reload(); return; }
+    if (document.getElementById('updateBar')) return;
+    const bar = document.createElement('div'); bar.id = 'updateBar';
+    bar.innerHTML = `<span>${L('A new version of the app is available.')}</span><button>${L('Update')}</button>`;
+    bar.querySelector('button').onclick = () => { reloading = true; location.reload(); };
+    document.body.appendChild(bar);
+  });
+}

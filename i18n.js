@@ -84,6 +84,7 @@ const PT = {
   'Link copied': 'Link copiado',
   'Only the link is shared, never your entries.': 'Só é partilhado o link, nunca os seus registos.',
   'I use Migraine Compass to log my migraines. Try it:': 'Uso a Migraine Compass para registar as minhas enxaquecas. Experimente:',
+  'A new version of the app is available.': 'Há uma nova versão da app.', 'Update': 'Atualizar',
   'Send a suggestion': 'Enviar sugestão', 'Suggestions go to a Google form. Please do not write your name or personal health details.': 'As sugestões vão para um formulário Google. Não escreva o seu nome nem dados de saúde pessoais.', 'rain': 'chuva', 'Location off': 'Localização desligada'
 };
 const L = s => (LANG === 'pt' && PT[s]) || s;

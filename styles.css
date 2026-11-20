@@ -185,3 +185,6 @@ button.col{border:0;background:none;padding:0;font:inherit;cursor:pointer}
 .toplinks{display:flex;gap:16px}
 .sharegrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0 4px}
 .sharegrid .btn{text-align:center;text-decoration:none;padding:12px 8px}
+#updateBar{position:fixed;left:12px;right:12px;bottom:84px;z-index:50;display:flex;gap:12px;align-items:center;justify-content:space-between;
+  background:var(--ink);color:var(--bg);border-radius:14px;padding:12px 14px;font-size:14px;box-shadow:0 6px 20px rgba(0,0,0,.2)}
+#updateBar button{border:0;background:var(--primary);color:#fff;font:inherit;font-weight:700;border-radius:10px;padding:8px 14px;cursor:pointer}
