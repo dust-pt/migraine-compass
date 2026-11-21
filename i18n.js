@@ -87,6 +87,7 @@ const PT = {
   'A new version of the app is available.': 'Há uma nova versão da app.', 'Update': 'Atualizar',
   'Another day': 'Outro dia', 'Day': 'Dia', 'Time (about)': 'Hora (aproximada)', 'For a migraine that happened before. The weather is looked up for that day.': 'Para uma enxaqueca que já aconteceu. O tempo é procurado para esse dia.',
   'Sleep the night before': 'Sono na noite anterior', 'Weather change that day': 'Mudança do tempo nesse dia', 'no data': 'sem dados',
+  'Participant code on this phone:': 'Código do participante neste telemóvel:',
   'Send a suggestion': 'Enviar sugestão', 'Suggestions go to a Google form. Please do not write your name or personal health details.': 'As sugestões vão para um formulário Google. Não escreva o seu nome nem dados de saúde pessoais.', 'rain': 'chuva', 'Location off': 'Localização desligada'
 };
 const L = s => (LANG === 'pt' && PT[s]) || s;

@@ -21,7 +21,17 @@ const APP_URL = 'https://migraine-compass.pages.dev';
 const GROUPS = ['routine', 'food', 'feelings'];
 const UNITS = ['min', 'hours', 'days'];
 const FEEDBACK_FORM = 'https://docs.google.com/forms/d/e/1FAIpQLSfG9RKKRzTS_LGPfTIUviv5vzTiU6vG5_XAGU24vawXJuzG4g/viewform';
-const EVAL_FORM = 'https://docs.google.com/forms/d/e/1FAIpQLScND-Njh00GLtgika9plVlZOSR3kby6mKCc_xpSPN4hRtWqLA/viewform';
+const EVAL_BASE = 'https://docs.google.com/forms/d/e/1FAIpQLScND-Njh00GLtgika9plVlZOSR3kby6mKCc_xpSPN4hRtWqLA/viewform';
+// Test sessions: opening the app with ?t=T1 stores the participant code on this phone,
+// so the evaluation form opens with the code already filled in (no typing, no mismatch with the facilitator's record).
+(() => {
+  const q = new URLSearchParams(location.search).get('t');
+  if (q && /^T\d{1,2}$/i.test(q)) {
+    try { const s = JSON.parse(localStorage.getItem('mc.settings') || '{}'); s.pcode = q.toUpperCase(); localStorage.setItem('mc.settings', JSON.stringify(s)); } catch {}
+    history.replaceState(null, '', location.pathname);
+  }
+})();
+const evalForm = () => { const c = settings().pcode; return c ? `${EVAL_BASE}?usp=pp_url&entry.2107248025=${encodeURIComponent(c)}` : EVAL_BASE; };
 const SINGLE = ['started', 'ongoing', 'medication', 'unit'];
 const EXCLUSIVE = { 'No change': 'routine', 'Nothing unusual': 'food' };
 
@@ -250,7 +260,7 @@ const screens = {
       <button class="hero" data-a="start"><b>${L('Log a migraine')}</b><span>${L('Three quick steps: when and routine, food and feelings, what helped.')}</span><small class="privacy">${L('Your entries are not saved in the cloud.')}</small><i>${L('Start ›')}</i></button>
       ${showInvite(all) ? `<div class="card invite"><p class="label">${L('Thank you for trying the app')}</p>
         <p style="margin-bottom:10px">${L('You have logged 3 migraines. Would you answer a short form about the app? It takes about 5 minutes and is anonymous.')}</p>
-        <div class="row"><a class="btn" style="text-align:center;text-decoration:none" href="${EVAL_FORM}" target="_blank" rel="noopener" data-a="inviteDone">${L('Answer the form')}</a>
+        <div class="row"><a class="btn" style="text-align:center;text-decoration:none" href="${evalForm()}" target="_blank" rel="noopener" data-a="inviteDone">${L('Answer the form')}</a>
         <button class="btn outline" data-a="inviteLater">${L('Not now')}</button></div></div>` : ''}
       ${last ? `<div class="card lastcard${S.lastOpen ? ' open' : ''}"><button class="lasthead" data-a="lastToggle" aria-expanded="${!!S.lastOpen}">
           <span><span class="label" style="display:block">${L('Last migraine')}</span><span>${esc(lastTxt)}</span></span><span class="chev">›</span></button>
@@ -386,7 +396,8 @@ const screens = {
           `<button class="chip" data-a="theme" data-v="${k}" aria-pressed="${s.theme === k}">${L(l)}</button>`).join('')}</div></div>
       <div class="card"><p class="label">${L('Feedback')}</p>
         <p class="muted small" style="margin-bottom:10px">${L('Have a suggestion or found a problem? Tell the team in a short, anonymous form.')}</p>
-        <a class="btn outline" style="display:block;text-align:center;text-decoration:none;margin-bottom:10px" href="${EVAL_FORM}" target="_blank" rel="noopener">${L('Answer the evaluation form')}</a>
+        <a class="btn outline" style="display:block;text-align:center;text-decoration:none;margin-bottom:10px" href="${evalForm()}" target="_blank" rel="noopener">${L('Answer the evaluation form')}</a>
+        ${s.pcode ? `<p class="note" style="margin:-4px 0 10px">${L('Participant code on this phone:')} <b>${esc(s.pcode)}</b></p>` : ''}
         <a class="btn" style="display:block;text-align:center;text-decoration:none" href="${FEEDBACK_FORM}" target="_blank" rel="noopener">${L('Send a suggestion')}</a>
         <p class="note">${L('Suggestions go to a Google form. Please do not write your name or personal health details.')}</p></div>
       <div class="card"><p class="label">${L('Test data')}</p>
@@ -587,7 +598,7 @@ document.addEventListener('click', e => {
     location.href = `mailto:?subject=${encodeURIComponent(L('Migraine summary'))}&body=${encodeURIComponent(body)}`; return;
   }
   if (a === 'demo') { const rest = read('mc.logs', []).filter(l => !l.demo); saveLogs([...rest, ...demoLogs()]); toast(L('Sample data loaded')); return; }
-  if (a === 'clear') { if (confirm(L('Delete all migraine entries on this device?'))) { saveLogs([]); toast(L('All entries deleted')); } return; }
+  if (a === 'clear') { if (confirm(L('Delete all migraine entries on this device?'))) { saveLogs([]); saveSettings({ pcode: null }); toast(L('All entries deleted')); render(); } return; }
 });
 document.addEventListener('change', e => {
   if (e.target.id === 'pastDate' || e.target.id === 'pastTime') {
