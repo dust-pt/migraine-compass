@@ -36,7 +36,14 @@ const EVAL_BASE = 'https://docs.google.com/forms/d/e/1FAIpQLScND-Njh00GLtgika9pl
     history.replaceState(null, '', location.pathname);
   }
 })();
-const evalForm = () => { const c = settings().pcode; return c ? `${EVAL_BASE}?usp=pp_url&entry.2107248025=${encodeURIComponent(c)}` : EVAL_BASE; };
+// Code sent with the evaluation form: the session code (T1…) when the app was opened from a session QR,
+// otherwise an anonymous code made once on this phone (U-XXXX), so the form never opens with the code empty.
+const anonCode = () => {
+  const st = settings(); if (st.ucode) return st.ucode;
+  const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', r = crypto.getRandomValues(new Uint8Array(4));
+  const c = 'U-' + [...r].map(x => abc[x % abc.length]).join(''); saveSettings({ ucode: c }); return c;
+};
+const evalForm = () => `${EVAL_BASE}?usp=pp_url&entry.2107248025=${encodeURIComponent(settings().pcode || anonCode())}`;
 const SINGLE = ['started', 'ongoing', 'medication', 'unit'];
 const EXCLUSIVE = { 'No change': 'routine', 'Nothing unusual': 'food' };
 
