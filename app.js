@@ -25,7 +25,12 @@ const EVAL_BASE = 'https://docs.google.com/forms/d/e/1FAIpQLScND-Njh00GLtgika9pl
 // Test sessions: opening the app with ?t=T1 stores the participant code on this phone,
 // so the evaluation form opens with the code already filled in (no typing, no mismatch with the facilitator's record).
 (() => {
-  const q = new URLSearchParams(location.search).get('t');
+  const params = new URLSearchParams(location.search);
+  if (params.get('inquerito') === 'feito') {
+    try { const s = JSON.parse(localStorage.getItem('mc.settings') || '{}'); s.invite = 'done'; localStorage.setItem('mc.settings', JSON.stringify(s)); } catch {}
+    history.replaceState(null, '', location.pathname);
+  }
+  const q = params.get('t');
   if (q && /^T\d{1,2}$/i.test(q)) {
     try { const s = JSON.parse(localStorage.getItem('mc.settings') || '{}'); s.pcode = q.toUpperCase(); localStorage.setItem('mc.settings', JSON.stringify(s)); } catch {}
     history.replaceState(null, '', location.pathname);
@@ -225,7 +230,8 @@ function monthDetail(key) {
 }
 
 // Invite people to the evaluation form once they have logged 3 migraines of their own (sample data does not count)
-const showInvite = all => settings().invite === 'new' && all.filter(l => !l.demo).length >= 3;
+// The evaluation form card stays on Home until the form is sent: the form's confirmation page links back with ?inquerito=feito
+const showInvite = () => settings().invite !== 'done';
 // Share the app: the phone's own share sheet when there is one, otherwise a few direct links
 const shareText = () => L('I use Migraine Compass to log my migraines. Try it:');
 function shareSheet() {
@@ -258,10 +264,10 @@ const screens = {
         <p>${esc(TX.since(new Date(l.start).toLocaleString(LOC, { weekday: 'short', hour: '2-digit', minute: '2-digit' }).replace(/\./g, ''), fmtDur(elapsedH(l)).replace(' ', '\u00a0')))}</p></div>
         <button class="btn small-btn" data-a="endStart" data-v="${l.id}">${L('It ended')}</button></div>`).join('')}
       <button class="hero" data-a="start"><b>${L('Log a migraine')}</b><span>${L('Three quick steps: when and routine, food and feelings, what helped.')}</span><small class="privacy">${L('Your entries are not saved in the cloud.')}</small><i>${L('Start ›')}</i></button>
-      ${showInvite(all) ? `<div class="card invite"><p class="label">${L('Thank you for trying the app')}</p>
-        <p style="margin-bottom:10px">${L('You have logged 3 migraines. Would you answer a short form about the app? It takes about 5 minutes and is anonymous.')}</p>
-        <div class="row"><a class="btn" style="text-align:center;text-decoration:none" href="${evalForm()}" target="_blank" rel="noopener" data-a="inviteDone">${L('Answer the form')}</a>
-        <button class="btn outline" data-a="inviteLater">${L('Not now')}</button></div></div>` : ''}
+      ${showInvite() ? `<div class="card invite"><p class="label">${L('Help us improve the app')}</p>
+        <p style="margin-bottom:10px">${L('Would you answer a short form about the app? It takes about 5 minutes and is anonymous.')}</p>
+        <a class="btn" style="display:block;text-align:center;text-decoration:none" href="${evalForm()}" target="_blank" rel="noopener">${L('Answer the form')}</a>
+        <p class="note" style="margin:10px 0 0">${L('This card disappears after you send the form.')} <button class="textlink small" style="margin:0" data-a="inviteDone">${L('I already answered')}</button></p></div>` : ''}
       ${last ? `<div class="card lastcard${S.lastOpen ? ' open' : ''}"><button class="lasthead" data-a="lastToggle" aria-expanded="${!!S.lastOpen}">
           <span><span class="label" style="display:block">${L('Last migraine')}</span><span>${esc(lastTxt)}</span></span><span class="chev">›</span></button>
           ${S.lastOpen ? migDetail(last) : ''}</div>`
@@ -585,8 +591,7 @@ document.addEventListener('click', e => {
     st.custom[g].push(t); st.extras[g].push(t);
     saveSettings({ extras: st.extras, custom: st.custom }); toast(TX.added(L(SECTION[g]))); return render();
   }
-  if (a === 'inviteDone') { saveSettings({ invite: 'done' }); setTimeout(render, 300); return; }
-  if (a === 'inviteLater') { saveSettings({ invite: 'later' }); return render(); }
+  if (a === 'inviteDone') { if (confirm(L('Did you send the form? The card will disappear.'))) { saveSettings({ invite: 'done' }); render(); } return; }
   if (a === 'dur') { D.durValue = Math.max(1, Math.min(999, (+D.durValue || 1) + +v)); return render(); }
   if (a === 'theme') { write('mc.settings', Object.assign(settings(), { theme: v })); applyTheme(); return render(); }
   if (a === 'ai') { if (S.sum && !S.sum.loading) draftWithAI(stats(logs())); return; }
@@ -598,7 +603,7 @@ document.addEventListener('click', e => {
     location.href = `mailto:?subject=${encodeURIComponent(L('Migraine summary'))}&body=${encodeURIComponent(body)}`; return;
   }
   if (a === 'demo') { const rest = read('mc.logs', []).filter(l => !l.demo); saveLogs([...rest, ...demoLogs()]); toast(L('Sample data loaded')); return; }
-  if (a === 'clear') { if (confirm(L('Delete all migraine entries on this device?'))) { saveLogs([]); saveSettings({ pcode: null }); toast(L('All entries deleted')); render(); } return; }
+  if (a === 'clear') { if (confirm(L('Delete all migraine entries on this device?'))) { saveLogs([]); saveSettings({ pcode: null, invite: 'new' }); toast(L('All entries deleted')); render(); } return; }
 });
 document.addEventListener('change', e => {
   if (e.target.id === 'pastDate' || e.target.id === 'pastTime') {

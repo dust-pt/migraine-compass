@@ -88,6 +88,7 @@ const PT = {
   'Another day': 'Outro dia', 'Day': 'Dia', 'Time (about)': 'Hora (aproximada)', 'For a migraine that happened before. The weather is looked up for that day.': 'Para uma enxaqueca que já aconteceu. O tempo é procurado para esse dia.',
   'Sleep the night before': 'Sono na noite anterior', 'Weather change that day': 'Mudança do tempo nesse dia', 'no data': 'sem dados',
   'Participant code on this phone:': 'Código do participante neste telemóvel:',
+  'Help us improve the app': 'Ajude-nos a melhorar a app', 'Would you answer a short form about the app? It takes about 5 minutes and is anonymous.': 'Pode responder a um questionário curto sobre a app? Demora cerca de 5 minutos e é anónimo.', 'This card disappears after you send the form.': 'Este cartão desaparece depois de enviar o questionário.', 'I already answered': 'Já respondi', 'Did you send the form? The card will disappear.': 'Já enviou o questionário? O cartão vai desaparecer.',
   'Send a suggestion': 'Enviar sugestão', 'Suggestions go to a Google form. Please do not write your name or personal health details.': 'As sugestões vão para um formulário Google. Não escreva o seu nome nem dados de saúde pessoais.', 'rain': 'chuva', 'Location off': 'Localização desligada'
 };
 const L = s => (LANG === 'pt' && PT[s]) || s;
