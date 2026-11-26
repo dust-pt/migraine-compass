@@ -166,7 +166,7 @@ const fmtMonth = d => d.toLocaleDateString(LOC, { month: 'short' }).replace('.',
 function stats(all) {
   const list = inPeriod(all, '6m');
   if (!list.length) return null;
-  const ints = list.map(l => l.intensity).sort((a, b) => a - b);
+  const ints = list.map(l => l.intensity).filter(n => n != null).sort((a, b) => a - b);
   const durs = list.map(l => l.durationH).filter(Boolean).sort((a, b) => a - b);
   const q = (arr, p) => arr[Math.min(arr.length - 1, Math.floor(p * arr.length))];
   const helped = {}; list.forEach(l => (l.helped || []).forEach(h => helped[h] = (helped[h] || 0) + 1));
@@ -182,7 +182,7 @@ function stats(all) {
   };
 }
 function localSummary(st) {
-  const [a, b] = st.intensityRange, d = st.durationRangeHours;
+  const [a, b] = st.intensityRange.map(x => x ?? '?'), d = st.durationRangeHours;
   const along = st.topFactors.map((f, i) => `${i ? f.factor.charAt(0).toLowerCase() + f.factor.slice(1) : f.factor} (${f.times}×)`).join(', ');
   return {
     title: `${L('Migraine summary')} · ${st.period}`,
@@ -211,7 +211,7 @@ function migDetail(l) {
   const weather = a.weather && a.weather !== L('Location off') ? a.weather : L('no data');
   const facts = `<div class="dfacts"><div><small>${L('Sleep the night before')}</small><b>${a.sleepMin ? hm(a.sleepMin) : L('no data')}</b></div>
     <div><small>${L('Weather change that day')}</small><b>${esc(weather)}</b></div></div>`;
-  return `<div class="mdetail"><p class="small muted">${esc(TX.detailHead(time, l.intensity))}</p>${facts}
+  return `<div class="mdetail"><p class="small muted">${esc(l.intensity != null ? TX.detailHead(time, l.intensity) : TX.startedAt(time))}</p>${facts}
     ${groups.map(([g, v]) => `<p class="mlabel">${L(g)}</p>${tags(v)}`).join('') || `<p class="small muted">${L('Nothing else logged.')}</p>`}
     ${l.note ? `<p class="mlabel">${L('Note (optional)').replace(/ \(.*\)/, '')}</p><p class="small">${esc(l.note)}</p>` : ''}</div>`;
 }
@@ -262,15 +262,17 @@ const screens = {
     const all = logs(), last = all[0];
     const month = all.filter(l => l.start.startsWith(monthKey(new Date()))).length;
     const lastTxt = last ? [new Date(last.start).toLocaleDateString(LOC, { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, ''),
-      TX.intensity(last.intensity), last.durationH ? TX.about(fmtDur(last.durationH)) : null].filter(Boolean).join(' · ') : L('Nothing logged yet');
+      last.intensity != null ? TX.intensity(last.intensity) : L('details to complete'), last.durationH ? TX.about(fmtDur(last.durationH)) : null].filter(Boolean).join(' · ') : L('Nothing logged yet');
     return `<div class="screen">
       <div class="brand"><span>Migraine Compass</span><span class="toplinks"><button class="textlink small" style="margin:0" data-a="share">${L('Share')}</button><button class="textlink small" style="margin:0" data-a="go" data-v="settings">${L('Settings')}</button></span></div>
       ${S.share ? shareSheet() : ''}
       <h1>${L('How are you today?')}</h1>
       ${all.filter(l => l.ongoing === 'Yes').map(l => `<div class="card ongoing"><div><p class="label" style="margin-bottom:4px">${L('Migraine in progress')}</p>
-        <p>${esc(TX.since(new Date(l.start).toLocaleString(LOC, { weekday: 'short', hour: '2-digit', minute: '2-digit' }).replace(/\./g, ''), fmtDur(elapsedH(l)).replace(' ', '\u00a0')))}</p></div>
+        <p>${esc(TX.since(new Date(l.start).toLocaleString(LOC, { weekday: 'short', hour: '2-digit', minute: '2-digit' }).replace(/\./g, ''), fmtDur(elapsedH(l)).replace(' ', '\u00a0')))}</p>
+        ${l.quick ? `<p class="note" style="margin:6px 0 0">${L('When you feel better, tap “It ended” to fill in the rest.')}</p>` : ''}</div>
         <button class="btn small-btn" data-a="endStart" data-v="${l.id}">${L('It ended')}</button></div>`).join('')}
       <button class="hero" data-a="start"><b>${L('Log a migraine')}</b><span>${L('Three quick steps: when and routine, food and feelings, what helped.')}</span><small class="privacy">${L('Your entries are not saved in the cloud.')}</small><i>${L('Start ›')}</i></button>
+      <button class="textlink quick" data-a="quickStart">${L('Starting now? Save only the time and rest — fill in the rest later')}</button>
       ${showInvite() ? `<div class="card invite"><p class="label">${L('Help us improve the app')}</p>
         <p style="margin-bottom:10px">${L('Would you answer a short form about the app? It takes about 5 minutes and is anonymous.')}</p>
         <a class="btn" style="display:block;text-align:center;text-decoration:none" href="${evalForm()}" target="_blank" rel="noopener">${L('Answer the form')}</a>
@@ -519,6 +521,11 @@ document.addEventListener('click', e => {
   if (a === 'lastToggle') { S.lastOpen = !S.lastOpen; return render(); }
   if (a === 'mig') { S.openMig = S.openMig === v ? null : v; document.getElementById('monthBack').innerHTML = monthDetail(S.month); return; }
   if (a === 'monthBack') { S.month = null; document.getElementById('monthFlip').classList.remove('flipped'); return; }
+  if (a === 'quickStart') { // one tap at the start of an attack: only the time is saved, nothing to read or answer now
+    const all = read('mc.logs', []);
+    all.push({ id: 'l' + Date.now(), start: localISO(new Date()), quick: true, ongoing: 'Yes', intensity: null, routine: [], food: [], feelings: [], helped: [] });
+    saveLogs(all); toast(L('Time saved. Rest; you can fill in the rest later.')); return render();
+  }
   if (a === 'endStart') {
     const l = logs().find(x => x.id === v); if (!l) return;
     const [value, unit] = toValUnit(elapsedH(l)); S.end = { id: l.id, start: l.start, value, unit }; return go('end');
@@ -528,7 +535,13 @@ document.addEventListener('click', e => {
   if (a === 'endSave') {
     const all = read('mc.logs', []), l = all.find(x => x.id === S.end.id);
     if (l) { l.ongoing = 'No'; l.durationH = Math.round(toHours(+S.end.value || 1, S.end.unit) * 100) / 100; saveLogs(all); }
-    S.end = null; toast(L('Saved. Take care of yourself.')); return go('home');
+    S.end = null;
+    if (l && l.quick) { // started with one tap: now, feeling better, complete the three steps with start and duration already set
+      const st = new Date(l.start), [durValue, unit] = toValUnit(l.durationH);
+      S.draft = Object.assign(blankDraft(), { started: 'Another day', date: dayISO(st), time: localISO(st).slice(11, 16), ongoing: 'No', durValue, unit, completeId: l.id });
+      toast(L('Saved. Now, if you can, complete the details.')); return go('log1');
+    }
+    toast(L('Saved. Take care of yourself.')); return go('home');
   }
   if (a === 'chip') {
     const g = el.dataset.g;
@@ -556,8 +569,10 @@ document.addEventListener('click', e => {
     const all = read('mc.logs', []);
     const { durValue, unit, ...entry } = rest;
     if (entry.ongoing === 'No') entry.durationH = Math.round(toHours(+durValue || 1, unit) * 100) / 100;
-    const { date, time, ...clean } = entry;
-    all.push(Object.assign({ id: 'l' + Date.now(), start: startFrom(started, date, time) }, clean));
+    const { date, time, completeId, ...clean } = entry;
+    const rec = Object.assign({ id: completeId || 'l' + Date.now(), start: startFrom(started, date, time) }, clean);
+    const at = completeId ? all.findIndex(x => x.id === completeId) : -1;
+    if (at >= 0) all[at] = rec; else all.push(rec);
     saveLogs(all); S.draft = blankDraft(); return go('saved');
   }
   if (a === 'night') { write('mc.settings', Object.assign(settings(), { theme: document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark' })); applyTheme(); return render(); }
