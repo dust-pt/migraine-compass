@@ -218,7 +218,7 @@ function migDetail(l) {
 function monthDetail(key) {
   const [y, m] = key.split('-').map(Number);
   const title = new Date(y, m - 1, 1).toLocaleDateString(LOC, { month: 'long', year: 'numeric' });
-  const list = logs().filter(l => l.start.startsWith(key)).reverse();
+  const list = logs().filter(l => l.start.startsWith(key)).sort((a, b) => b.start.localeCompare(a.start)); // most recent first
   const maxH = Math.max(1, ...list.map(l => l.durationH || 0));
   const rows = list.map(l => {
     const day = cap(new Date(l.start).toLocaleDateString(LOC, { weekday: 'short', day: 'numeric' }).replace(/\./g, ''));
