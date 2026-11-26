@@ -254,6 +254,19 @@ function shareSheet() {
 }
 const elapsedH = l => Math.max(0.25, (Date.now() - new Date(l.start).getTime()) / 36e5);
 // Pick a readable value and unit for a number of hours
+// "It ended": the person says when it ended (now, earlier today, yesterday or another day) and the duration is worked out
+const endOpts = e => { const days = Math.round((new Date(dayISO(new Date())) - new Date(e.start.slice(0, 10))) / 864e5);
+  return ['Now', 'Earlier today', ...(days >= 1 ? ['Yesterday'] : []), ...(days >= 2 ? ['Another day'] : [])]; };
+function endCalc() {
+  const e = S.end, now = new Date();
+  let end = now;
+  if (e.when === 'Earlier today') end = new Date(dayISO(now) + 'T' + (e.time || '12:00'));
+  if (e.when === 'Yesterday') end = new Date(dayISO(new Date(now - 864e5)) + 'T' + (e.time || '12:00'));
+  if (e.when === 'Another day') end = new Date((e.date || dayISO(now)) + 'T' + (e.time || '12:00'));
+  if (end > now) end = now;
+  const h = (end - new Date(e.start)) / 36e5;
+  e.bad = h <= 0; [e.value, e.unit] = toValUnit(Math.max(0.25, h));
+}
 const toValUnit = h => h < 1 ? [Math.max(5, Math.round(h * 60 / 5) * 5), 'min'] : h < 48 ? [Math.round(h), 'hours'] : [Math.round(h / 24), 'days'];
 
 // ---------- Screens ----------
@@ -390,14 +403,18 @@ const screens = {
   end() {
     const e = S.end;
     return `<div class="screen"><div class="stephead"><button class="back" data-a="go" data-v="home">${L('‹ Back')}</button></div>
-      <h1>${L('How long did it last?')}</h1>
-      <p class="sub">${esc(TX.startedAt(new Date(e.start).toLocaleString(LOC, { weekday: 'long', hour: '2-digit', minute: '2-digit' })))}</p>
+      <h1>${L('When did it end?')}</h1>
+      <p class="sub">${esc(TX.startedAt(new Date(e.start).toLocaleString(LOC, { weekday: 'long', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })))}</p>
+      <div class="card">${chips('endwhen', endOpts(e), e.when)}
+        ${e.when === 'Now' ? '' : `<div class="pastrow">${e.when === 'Another day' ? `<label><small>${L('Day')}</small><input id="endDate" type="date" min="${e.start.slice(0, 10)}" max="${dayISO(new Date())}" value="${e.date}"></label>` : ''}
+          <label><small>${L('Time (about)')}</small><input id="endTime" type="time" value="${e.time}"></label></div>`}
+        ${e.bad ? `<p class="warn" style="margin-top:8px">${L('The end cannot be before the start.')}</p>` : ''}</div>
       <div class="card"><p class="label">${L('Duration')}</p>
         <div class="durrow"><div class="stepper"><button data-a="enddur" data-v="-1" aria-label="${L('Less')}">−</button>
           <input id="endValue" type="number" inputmode="numeric" min="1" max="999" value="${e.value}">
           <button data-a="enddur" data-v="1" aria-label="${L('More')}">+</button></div>
           ${chips('endunit', UNITS, e.unit)}</div>
-        <p class="note">${L('Filled in with the time since it started. Change it if it ended earlier.')}</p></div>
+        <p class="note">${L('Worked out from when it started and when it ended. You can change it.')}</p></div>
       <div class="footer"><button class="btn" data-a="endSave">${L('Save')}</button></div></div>`;
   },
 
@@ -528,12 +545,15 @@ document.addEventListener('click', e => {
   }
   if (a === 'endStart') {
     const l = logs().find(x => x.id === v); if (!l) return;
-    const [value, unit] = toValUnit(elapsedH(l)); S.end = { id: l.id, start: l.start, value, unit }; return go('end');
+    const now = new Date(); S.end = { id: l.id, start: l.start, when: 'Now', date: dayISO(new Date(now - 2 * 864e5)), time: localISO(now).slice(11, 16) };
+    endCalc(); return go('end');
   }
   if (a === 'enddur') { S.end.value = Math.max(1, Math.min(999, (+S.end.value || 1) + +v)); return render(); }
   if (a === 'chip' && el.dataset.g === 'endunit') { S.end.unit = v; return render(); }
+  if (a === 'chip' && el.dataset.g === 'endwhen') { S.end.when = v; endCalc(); return render(); }
   if (a === 'endSave') {
     const all = read('mc.logs', []), l = all.find(x => x.id === S.end.id);
+    if (S.end.bad) { toast(L('The end cannot be before the start.')); return; }
     if (l) { l.ongoing = 'No'; l.durationH = Math.round(toHours(+S.end.value || 1, S.end.unit) * 100) / 100; saveLogs(all); }
     S.end = null;
     if (l && l.quick) { // started with one tap: now, feeling better, complete the three steps with start and duration already set
@@ -628,6 +648,11 @@ document.addEventListener('click', e => {
   if (a === 'clear') { if (confirm(L('Delete all migraine entries on this device?'))) { saveLogs([]); saveSettings({ pcode: null, invite: 'new' }); toast(L('All entries deleted')); render(); } return; }
 });
 document.addEventListener('change', e => {
+  if ((e.target.id === 'endDate' || e.target.id === 'endTime') && S.end) {
+    if (e.target.id === 'endDate') S.end.date = e.target.value || dayISO(new Date());
+    else S.end.time = e.target.value || '12:00';
+    endCalc(); render(); return;
+  }
   if (e.target.id === 'pastDate' || e.target.id === 'pastTime') {
     const today = dayISO(new Date());
     if (e.target.id === 'pastDate') S.draft.date = e.target.value && e.target.value <= today ? e.target.value : today;
