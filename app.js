@@ -272,7 +272,7 @@ const screens = {
         ${l.quick ? `<p class="note" style="margin:6px 0 0">${L('When you feel better, tap “It ended” to fill in the rest.')}</p>` : ''}</div>
         <button class="btn small-btn" data-a="endStart" data-v="${l.id}">${L('It ended')}</button></div>`).join('')}
       <button class="hero" data-a="start"><b>${L('Log a migraine')}</b><span>${L('Three quick steps: when and routine, food and feelings, what helped.')}</span><small class="privacy">${L('Your entries are not saved in the cloud.')}</small><i>${L('Start ›')}</i></button>
-      <button class="textlink quick" data-a="quickStart">${L('Starting now? Save only the time and rest — fill in the rest later')}</button>
+      ${all.some(l => l.ongoing === 'Yes') ? '' : `<button class="textlink quick" data-a="quickStart">${L('Starting now? Save only the time and rest — fill in the rest later')}</button>`}
       ${showInvite() ? `<div class="card invite"><p class="label">${L('Help us improve the app')}</p>
         <p style="margin-bottom:10px">${L('Would you answer a short form about the app? It takes about 5 minutes and is anonymous.')}</p>
         <a class="btn" style="display:block;text-align:center;text-decoration:none" href="${evalForm()}" target="_blank" rel="noopener">${L('Answer the form')}</a>
