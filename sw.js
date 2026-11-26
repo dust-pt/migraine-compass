@@ -1,6 +1,6 @@
 // Service worker: network first, so a new deploy shows up on the next load; the cache is only used offline.
 // Bump VERSION on each deploy so open pages notice the new worker and refresh.
-const VERSION = 'mc-v31';
+const VERSION = 'mc-v32';
 const SHELL = [
   './', 'index.html', 'styles.css', 'i18n.js', 'app.js', 'manifest.webmanifest',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'

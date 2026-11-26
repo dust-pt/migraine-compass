@@ -267,6 +267,10 @@ function endCalc() {
   const h = (end - new Date(e.start)) / 36e5;
   e.bad = h <= 0; [e.value, e.unit] = toValUnit(Math.max(0.25, h));
 }
+// A migraine cannot have lasted longer than the time since it started (e.g. started 20 min ago, not "15 h")
+const maxDurH = D => Math.max(0.1, (Date.now() - new Date(startFrom(D.started, D.date, D.time))) / 36e5);
+const durTooLong = D => D.ongoing === 'No' && toHours(+D.durValue || 1, D.unit) > maxDurH(D) + 0.1;
+function fitDur(D) { if (D.ongoing === 'No' && D.started !== 'Another day') [D.durValue, D.unit] = toValUnit(maxDurH(D)); }
 const toValUnit = h => h < 1 ? [Math.max(5, Math.round(h * 60 / 5) * 5), 'min'] : h < 48 ? [Math.round(h), 'hours'] : [Math.round(h / 24), 'days'];
 
 // ---------- Screens ----------
@@ -322,7 +326,8 @@ const screens = {
           <div class="durrow"><div class="stepper"><button data-a="dur" data-v="-1" aria-label="${L('Less')}">−</button>
             <input id="durValue" type="number" inputmode="numeric" min="1" max="999" value="${d.durValue}">
             <button data-a="dur" data-v="1" aria-label="${L('More')}">+</button></div>
-            ${chips('unit', UNITS, d.unit)}</div></div>` : ''}</div>
+            ${chips('unit', UNITS, d.unit)}</div>
+          ${durTooLong(d) ? `<p class="warn" style="margin-top:8px">${esc(TX.tooLong(fmtDur(maxDurH(d))))}</p>` : ''}</div>` : ''}</div>
       ${optCard('routine', d.routine)}`, 'log3', 'home');
   },
 
@@ -527,7 +532,10 @@ function go(screen) {
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-a]'); if (!el) return;
   const a = el.dataset.a, v = el.dataset.v, D = S.draft;
-  if (a === 'go') return go(v);
+  if (a === 'go') {
+    if (S.screen === 'log1' && v === 'log3' && durTooLong(D)) { toast(TX.tooLong(fmtDur(maxDurH(D)))); return render(); }
+    return go(v);
+  }
   if (a === 'start') { S.draft = blankDraft(); return go('log1'); }
   if (a === 'intensity') { D.intensity = +v; return render(); }
   if (a === 'period') { S.period = v; return render(); }
@@ -567,8 +575,10 @@ document.addEventListener('click', e => {
     const g = el.dataset.g;
     if (SINGLE.includes(g)) {
       const before = D[g]; D[g] = (g === 'medication' && D[g] === v) ? null : v;
+      if (g === 'ongoing' && v === 'No' && before !== 'No') fitDur(D);
       if (g === 'started' && before !== v) {
         if (v === 'Another day') D.ongoing = 'No'; // a past migraine has usually ended
+        else fitDur(D);
         loadAuto(true);
       }
     }
@@ -588,7 +598,7 @@ document.addEventListener('click', e => {
     const { started, ...rest } = D;
     const all = read('mc.logs', []);
     const { durValue, unit, ...entry } = rest;
-    if (entry.ongoing === 'No') entry.durationH = Math.round(toHours(+durValue || 1, unit) * 100) / 100;
+    if (entry.ongoing === 'No') entry.durationH = Math.round(Math.min(toHours(+durValue || 1, unit), maxDurH(D)) * 100) / 100;
     const { date, time, completeId, ...clean } = entry;
     const rec = Object.assign({ id: completeId || 'l' + Date.now(), start: startFrom(started, date, time) }, clean);
     const at = completeId ? all.findIndex(x => x.id === completeId) : -1;

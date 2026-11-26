@@ -96,6 +96,7 @@ const L = s => (LANG === 'pt' && PT[s]) || s;
 // Text with numbers
 const TX = {
   since: (when, dur) => LANG === 'pt' ? `Desde ${when} · há ${dur}` : `Since ${when} · ${dur} ago`,
+  tooLong: max => LANG === 'pt' ? `Pela hora de início, durou no máximo ${max}. Corrija a duração ou a hora de início.` : `From the start time, it lasted at most ${max}. Please correct the duration or the start time.`,
   startedAt: when => LANG === 'pt' ? `Começou ${when}.` : `Started ${when}.`,
   detailHead: (t, n) => LANG === 'pt' ? `Começou às ${t} · intensidade ${n}/10` : `Started at ${t} · intensity ${n}/10`,
   stepOf: (n, t) => LANG === 'pt' ? `Passo ${n} de ${t}` : `Step ${n} of ${t}`,
