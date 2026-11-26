@@ -73,6 +73,7 @@ const E = { code: 1205096400, fac: 1595840279, date: 1344331820, audio: 45585695
 // Open (written) questions of the facilitator record. Choice questions are ticked in the form itself.
 const QS = [
   { sec: 'Cenário A · Depois de uma crise' },
+  { id: 33708182, t: 'Tempo até guardar o registo (min:seg)', short: true, timer: true },
   { id: 1238958588, t: 'Que passo saltou?', short: true },
   { id: 95350148, t: 'Hesitações, comentários e emoções (pensar em voz alta)' },
   { sec: 'Cenário B · Olhar para trás' },
@@ -92,7 +93,8 @@ const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } cat
 const used = () => store('mc.sessao.used') || [];
 const draft = c => store('mc.sessao.draft.' + c) || { consent: false, fac: store('mc.sessao.fac') || '', a: {} };
 const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
-let sel = null, rec = null;
+let sel = null, rec = null, clock = null;
+const mmss = ms => { const s = Math.round(ms / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
 
 function render() {
   const u = used();
@@ -115,12 +117,12 @@ function render() {
       <label class="consent"><input type="checkbox" id="consent" ${d.consent ? 'checked' : ''}>
         <span>O participante autorizou a gravação de áudio. <span class="muted small">Cada gravação é enviada ao Gemini (Google) só para ser transcrita e não fica guardada.</span></span></label>
       ${canMic ? '' : '<p class="warn" style="margin-top:8px">Este browser não grava áudio. Escreva as respostas.</p>'}
-      <p class="muted small" style="margin-top:10px">Toque no 🎙 para gravar a resposta a uma pergunta e outra vez para parar (máx. 4 min). O texto aparece na caixa e pode ser corrigido. As perguntas de escolha preenchem-se no formulário.</p>
+      <p class="muted small" style="margin-top:10px">Toque no 🎙 para gravar a resposta a uma pergunta e outra vez para parar (máx. 4 min). O texto aparece na caixa e pode ser corrigido. No cenário A, toque no ⏱ quando o participante começar e outra vez quando guardar o registo. As perguntas de escolha preenchem-se no formulário.</p>
       ${QS.map(q => q.sec ? `<p class="sec">${q.sec}</p>` : `
         <div class="q"><label for="q${q.id}">${q.t}</label>
           <div class="qrow">
             ${q.short ? `<input type="text" id="q${q.id}" data-q="${q.id}" value="${esc(d.a[q.id] || '')}">` : `<textarea id="q${q.id}" data-q="${q.id}">${esc(d.a[q.id] || '')}</textarea>`}
-            <button class="mic" data-mic="${q.id}" data-kind="${q.kind || 'notes'}" aria-label="Gravar resposta: ${q.t}" ${d.consent && canMic ? '' : 'disabled'}>🎙</button>
+            ${q.timer ? `<button class="mic" data-timer="${q.id}" aria-label="Cronómetro: iniciar ou parar">⏱</button>` : `<button class="mic" data-mic="${q.id}" data-kind="${q.kind || 'notes'}" aria-label="Gravar resposta: ${q.t}" ${d.consent && canMic ? '' : 'disabled'}>🎙</button>`}
           </div>
           <div class="status" id="s${q.id}"></div></div>`).join('')}
     </div>
@@ -185,7 +187,7 @@ async function startRec(btn) {
     if (Date.now() - t0 > MAX_MS) stopRec();
   }, 500) };
   btn.classList.add('rec'); btn.textContent = '■';
-  document.querySelectorAll('.mic').forEach(b => { if (b !== btn) b.disabled = true; });
+  document.querySelectorAll('[data-mic]').forEach(b => { if (b !== btn) b.disabled = true; });
 }
 function stopRec() {
   if (!rec) return;
@@ -212,10 +214,17 @@ async function transcribe(id, kind, blob) {
   }
   btn && btn.classList.remove('busy'); enableMics();
 }
-function enableMics() { const d = draft(sel); document.querySelectorAll('.mic').forEach(b => b.disabled = !d.consent); }
+function enableMics() { const d = draft(sel); document.querySelectorAll('[data-mic]').forEach(b => b.disabled = !d.consent); }
 
 document.addEventListener('click', e => {
-  const b = e.target.closest('[data-c]'); if (b) { if (rec) stopRec(); sel = b.dataset.c; render(); document.getElementById('panels').scrollIntoView({ behavior: 'smooth' }); return; }
+  const b = e.target.closest('[data-c]'); if (b) { if (rec) stopRec(); if (clock) { clearInterval(clock.iv); clock = null; } sel = b.dataset.c; render(); document.getElementById('panels').scrollIntoView({ behavior: 'smooth' }); return; }
+  const tm = e.target.closest('[data-timer]');
+  if (tm) {
+    const id = tm.dataset.timer, box = document.getElementById('q' + id), st = document.getElementById('s' + id);
+    if (clock) { clearInterval(clock.iv); const v = mmss(Date.now() - clock.t0); clock = null; box.value = v; setAnswer(id, v); tm.classList.remove('rec'); tm.textContent = '⏱'; st.textContent = 'Parado. Pode corrigir o tempo.'; }
+    else { const t0 = Date.now(); clock = { t0, iv: setInterval(() => { box.value = mmss(Date.now() - t0); }, 500) }; tm.classList.add('rec'); tm.textContent = '■'; st.textContent = 'A contar desde o início do cenário A. Toque para parar quando o participante guardar.'; }
+    return;
+  }
   const m = e.target.closest('[data-mic]'); if (m) { if (m.disabled) return; rec && rec.btn === m ? stopRec() : startRec(m); return; }
   const o = e.target.closest('#openForm'); if (o) { const u = used(); if (!u.includes(sel)) { u.push(sel); save('mc.sessao.used', u); setTimeout(render, 300); } return; }
   const t = e.target.closest('[data-toggle]'); if (t) { const c = t.dataset.toggle; let u = used(); u = u.includes(c) ? u.filter(x => x !== c) : [...u, c]; save('mc.sessao.used', u); render(); return; }
