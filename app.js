@@ -362,7 +362,7 @@ const screens = {
       <div class="card"><p class="label">${L('Most logged alongside a migraine')}</p>
         ${top.length ? top.map(([k, n]) => `<div class="factor"><div><span>${esc(L(k))}</span><b>${n}×</b></div>
           <div class="meter"><i style="width:${Math.round(n / topMax * 90)}%"></i></div></div>`).join('') : `<p class="muted">${L('Log a few migraines to see what comes up most.')}</p>`}
-        <p class="note">${L(all.some(l => l.demo) ? 'Counts from your past entries only. Sample data.' : 'Counts from your past entries only.')}</p></div>
+        <p class="note">${L('These are possibilities, not causes.')} ${L(all.some(l => l.demo) ? 'Counts from your past entries only. Sample data.' : 'Counts from your past entries only.')}</p></div>
     </div>${nav('history')}`;
   },
 
